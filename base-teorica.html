@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base Teórica — Renda Fixa Inteligente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --black: #0a0a0a;
+            --ink: #1a1a2e;
+            --blue: #1d4ed8;
+            --blue-light: #eff6ff;
+            --blue-mid: #bfdbfe;
+            --green: #065f46;
+            --green-light: #ecfdf5;
+            --amber: #92400e;
+            --amber-light: #fffbeb;
+            --red: #991b1b;
+            --red-light: #fef2f2;
+            --slate: #64748b;
+            --border: #e2e8f0;
+            --surface: #f8fafc;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--surface);
+            color: var(--ink);
+            line-height: 1.7;
+        }
+
+        /* ── HEADER ── */
+        .site-header {
+            background: var(--black);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 3px solid var(--blue);
+        }
+        .site-header .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+        }
+        .site-header .logo-badge {
+            width: 36px; height: 36px;
+            background: #1d4ed8;
+            border: 2px solid white;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 0.75rem; color: white;
+            flex-shrink: 0;
+        }
+        .site-header .logo-text { font-size: 0.85rem; font-weight: 700; color: white; }
+        .site-header .logo-sub  { font-size: 0.7rem; color: #93c5fd; font-weight: 400; }
+        .back-link {
+            font-size: 0.75rem; color: #93c5fd; text-decoration: none;
+            border: 1px solid #334155;
+            padding: 0.4rem 0.9rem; border-radius: 6px;
+            transition: background 0.15s;
+        }
+        .back-link:hover { background: #1e293b; }
+
+        /* ── HERO ── */
+        .hero {
+            background: linear-gradient(135deg, #0a0a0a 0%, #0f172a 60%, #1e1b4b 100%);
+            color: white;
+            padding: 4rem 2rem 3rem;
+            text-align: center;
+            border-bottom: 1px solid #1e293b;
+        }
+        .hero-tag {
+            display: inline-block;
+            background: rgba(29,78,216,0.3);
+            border: 1px solid #3b82f6;
+            color: #93c5fd;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            padding: 0.3rem 1rem;
+            border-radius: 999px;
+            margin-bottom: 1.25rem;
+        }
+        .hero h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(1.8rem, 4vw, 3rem);
+            font-weight: 900;
+            line-height: 1.15;
+            margin-bottom: 1rem;
+        }
+        .hero h1 span { color: #60a5fa; }
+        .hero p {
+            max-width: 600px;
+            margin: 0 auto;
+            color: #94a3b8;
+            font-size: 0.95rem;
+        }
+
+        /* ── LAYOUT ── */
+        .layout {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 0;
+            padding: 0;
+            align-items: start;
+        }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            position: sticky;
+            top: 60px;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+            padding: 2rem 1.5rem;
+            border-right: 1px solid var(--border);
+            background: white;
+        }
+        .sidebar-title {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--slate);
+            margin-bottom: 1rem;
+        }
+        .toc-list { list-style: none; }
+        .toc-item { margin-bottom: 0.1rem; }
+        .toc-link {
+            display: block;
+            padding: 0.4rem 0.75rem;
+            font-size: 0.8rem;
+            color: var(--slate);
+            text-decoration: none;
+            border-radius: 6px;
+            border-left: 2px solid transparent;
+            transition: all 0.15s;
+            line-height: 1.4;
+        }
+        .toc-link:hover { background: var(--blue-light); color: var(--blue); border-left-color: var(--blue); }
+        .toc-link.active { background: var(--blue-light); color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+        .toc-num {
+            display: inline-block;
+            width: 18px; height: 18px;
+            background: var(--border);
+            border-radius: 3px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-align: center;
+            line-height: 18px;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
+        /* ── CONTENT ── */
+        .content {
+            padding: 3rem 3rem 4rem;
+            max-width: 780px;
+        }
+
+        /* ── SEÇÃO ── */
+        .section {
+            margin-bottom: 4rem;
+            padding-top: 1rem;
+        }
+        .section-number {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--blue);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+        .section h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--ink);
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border);
+        }
+        .section h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--ink);
+            margin: 1.5rem 0 0.5rem;
+        }
+        .section p {
+            font-size: 0.9rem;
+            color: #334155;
+            margin-bottom: 0.9rem;
+            line-height: 1.75;
+        }
+
+        /* ── TABELAS ── */
+        .table-wrapper {
+            margin: 1.5rem 0;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            background: white;
+        }
+        .table-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.25rem;
+            background: var(--ink);
+            color: white;
+        }
+        .table-header-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #86efac;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .live-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: #22c55e;
+        }
+        .live-dot.loading { background: #f59e0b; animation: pulse 1s infinite; }
+        .live-dot.err { background: #ef4444; animation: none; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+        thead tr { background: #f1f5f9; }
+        thead th {
+            padding: 0.65rem 1rem;
+            text-align: left;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--slate);
+            border-bottom: 1px solid var(--border);
+        }
+        tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover { background: #f8fafc; }
+        tbody td { padding: 0.75rem 1rem; color: #1e293b; vertical-align: top; }
+        tbody td:first-child { font-weight: 600; }
+        .td-muted { color: var(--slate); font-size: 0.8rem; }
+        .td-live { font-weight: 700; color: var(--blue); font-size: 0.9rem; }
+        .td-skel {
+            display: inline-block; width: 80px; height: 14px;
+            background: linear-gradient(90deg,#e2e8f0 25%,#f1f5f9 50%,#e2e8f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s infinite;
+            border-radius: 4px;
+            vertical-align: middle;
+        }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+        /* ── CALLOUTS ── */
+        .callout {
+            padding: 1rem 1.25rem;
+            border-radius: 10px;
+            margin: 1.25rem 0;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            border-left: 3px solid;
+        }
+        .callout-blue  { background: var(--blue-light);  border-color: var(--blue);   color: #1e3a8a; }
+        .callout-green { background: var(--green-light); border-color: #059669;        color: var(--green); }
+        .callout-amber { background: var(--amber-light); border-color: #d97706;        color: var(--amber); }
+        .callout-red   { background: var(--red-light);   border-color: #dc2626;        color: var(--red); }
+        .callout strong { font-weight: 700; }
+
+        /* ── FORMULA BOX ── */
+        .formula-box {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 10px;
+            padding: 1.25rem 1.5rem;
+            margin: 1.25rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.88rem;
+            line-height: 2;
+        }
+        .formula-box .var { color: #60a5fa; }
+        .formula-box .eq  { color: #a78bfa; }
+        .formula-box .comment { color: #64748b; font-style: italic; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.78rem; }
+
+        /* ── ALOCAÇÃO SUGERIDA ── */
+        .alloc-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin: 1.25rem 0;
+        }
+        .alloc-card {
+            border-radius: 10px;
+            padding: 1rem 1.1rem;
+            border: 1px solid var(--border);
+            background: white;
+        }
+        .alloc-pct {
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+        .alloc-label { font-size: 0.78rem; font-weight: 700; margin: 0.25rem 0 0.5rem; }
+        .alloc-desc  { font-size: 0.75rem; color: var(--slate); line-height: 1.5; }
+
+        /* ── FOOTER ── */
+        footer {
+            background: var(--black);
+            color: #64748b;
+            text-align: center;
+            font-size: 0.75rem;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+        footer a { color: #3b82f6; text-decoration: none; }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+            .layout { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .content { padding: 2rem 1.25rem; }
+            .alloc-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header class="site-header">
+        <a class="logo" href="index.html">
+            <div class="logo-badge">RF</div>
+            <div>
+                <div class="logo-text">GUIA RENDA FIXA</div>
+                <div class="logo-sub">Aplique Você Mesmo</div>
+            </div>
+        </a>
+        <a class="back-link" href="index.html">← Voltar ao Dashboard</a>
+    </header>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-tag">Fundamento Teórico · v1.0</div>
+        <h1>Base Teórica —<br><span>Renda Fixa Inteligente</span></h1>
+        <p>Estratégias e ferramentas para estruturação de carteiras no mercado brasileiro. Dados macroeconômicos atualizados em tempo real via API do Banco Central.</p>
+    </section>
+
+    <!-- LAYOUT PRINCIPAL -->
+    <div class="layout">
+
+        <!-- SIDEBAR / SUMÁRIO -->
+        <aside class="sidebar">
+            <p class="sidebar-title">Sumário</p>
+            <ul class="toc-list">
+                <li class="toc-item"><a class="toc-link active" href="#s1"><span class="toc-num">1</span>Cenário Macroeconômico</a></li>
+                <li class="toc-item"><a class="toc-link" href="#s2"><span class="toc-num">2</span>Curva de Juros e Inflação Implícita</a></li>
+                <li class="toc-item"><a class="toc-link" href="#s3"><span class="toc-num">3</span>Títulos do Tesouro Nacional</a></li>
+                <li class="toc-item"><a class="toc-link" href="#s4"><span class="toc-num">4</span>CDB, LCI e LCA</a></li>
+                <li class="toc-item"><a class="toc-link" href="#s5"><span class="toc-num">5</span>Tributação e Gross-Up</a></li>
+                <li class="toc-item"><a class="toc-link" href="#s6"><span class="toc-num">6</span>Conjuntura Internacional</a></li>
+                <li class="toc-item"><a class="toc-link" href="#s7"><span class="toc-num">7</span>Estruturação da Cesta</a></li>
+            </ul>
+        </aside>
+
+        <!-- CONTEÚDO -->
+        <main class="content">
+
+            <!-- ══════════ 1. MACRO ══════════ -->
+            <section class="section" id="s1">
+                <div class="section-number">Seção 1</div>
+                <h2>Cenário Macroeconômico e o Papel do Banco Central</h2>
+                <p>O ponto de partida para qualquer decisão de investimento em renda fixa é a análise da <strong>taxa Selic</strong>, definida pelo Copom como principal instrumento de controle da inflação. Em 2026, a Selic encontra-se em patamar restritivo, necessário para convergir as expectativas de inflação para a meta do CMN.</p>
+                <p>O <strong>Relatório Focus</strong>, publicado semanalmente pelo Banco Central, resume as projeções de cerca de 140 instituições financeiras para IPCA, Selic, PIB e câmbio. Para o investidor de renda fixa, o Focus não é apenas um guia — é um benchmark ativo de precificação.</p>
+
+                <!-- TABELA 1 — DINÂMICA VIA BACEN API -->
+                <div class="table-wrapper">
+                    <div class="table-header">
+                        <span class="table-header-title">Tabela 1 — Projeções Macroeconômicas (Relatório Focus)</span>
+                        <span class="live-badge">
+                            <span class="live-dot loading" id="t1-dot"></span>
+                            <span id="t1-status">Carregando...</span>
+                        </span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Indicador</th>
+                                <th>Valor Atual / Projeção 2026</th>
+                                <th>Projeção 2027</th>
+                                <th>Contexto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>IPCA (Inflação)</td>
+                                <td class="td-live" id="t1-ipca"><span class="td-skel"></span></td>
+                                <td class="td-muted">~3,80%</td>
+                                <td class="td-muted">Meta central: 3,00%</td>
+                            </tr>
+                            <tr>
+                                <td>Taxa Selic (atual)</td>
+                                <td class="td-live" id="t1-selic"><span class="td-skel"></span></td>
+                                <td class="td-muted">~10,50%</td>
+                                <td class="td-muted">Definida pelo Copom</td>
+                            </tr>
+                            <tr>
+                                <td>Crescimento do PIB</td>
+                                <td class="td-live" id="t1-pib"><span class="td-skel"></span></td>
+                                <td class="td-muted">~1,80%</td>
+                                <td class="td-muted">Desaceleração esperada</td>
+                            </tr>
+                            <tr>
+                                <td>Câmbio (USD/BRL)</td>
+                                <td class="td-live" id="t1-cambio"><span class="td-skel"></span></td>
+                                <td class="td-muted">Estabilidade projetada</td>
+                                <td class="td-muted">Influenciado pelo diferencial de juros</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="padding: 0.5rem 1rem; background: #f8fafc; border-top: 1px solid var(--border); font-size: 0.7rem; color: var(--slate);">
+                        Fonte: <a href="https://api.bcb.gov.br" target="_blank" style="color:var(--blue)">API SGS — Banco Central do Brasil</a> · 
+                        <span id="t1-updated">—</span>
+                    </div>
+                </div>
+
+                <div class="callout callout-blue">
+                    <strong>Como usar esta tabela:</strong> Se as projeções do Focus para a Selic ao final de 2026 indicam queda, avalie se os títulos prefixados atuais já precificam esse movimento — ou se ainda oferecem uma oportunidade de ganho de capital via marcação a mercado.
+                </div>
+            </section>
+
+            <!-- ══════════ 2. CURVA DE JUROS ══════════ -->
+            <section class="section" id="s2">
+                <div class="section-number">Seção 2</div>
+                <h2>A Curva de Juros e a Inflação Implícita</h2>
+                <p>A precificação dos títulos de renda fixa depende da <strong>Estrutura a Termo das Taxas de Juros (ETTJ)</strong>, que reflete as expectativas dos agentes para diferentes vértices temporais. A análise da curva é fundamental para entender o prêmio de risco exigido para prazos mais longos.</p>
+
+                <h3>Derivação da Curva DI</h3>
+                <p>Os contratos de Futuros de DI negociados na B3 são a principal fonte para construção da curva prefixada. Quando a curva apresenta inclinação positiva, o mercado sinaliza expectativa de juros maiores no futuro ou existência de risco fiscal que exige compensação adicional.</p>
+
+                <h3>Inflação Implícita — Equação de Fisher</h3>
+                <p>A inflação implícita é derivada da diferença entre a rentabilidade de um título nominal (Prefixado) e a de um título indexado (IPCA+) para o mesmo prazo. A fórmula fundamental:</p>
+
+                <div class="formula-box">
+                    <span class="comment">// Equação de Fisher</span><br>
+                    <span class="var">i_nominal</span> <span class="eq">=</span> (1 + <span class="var">i_real</span>) × (1 + <span class="var">inflação_implícita</span>) − 1<br><br>
+                    <span class="comment">// Exemplo: Prefixado 14% a.a. vs IPCA+ 6,5% a.a.</span><br>
+                    <span class="var">inflação_implícita</span> <span class="eq">=</span> (1.14 / 1.065) − 1 <span class="eq">=</span> <strong style="color:#4ade80">7,04%</strong><br><br>
+                    <span class="comment">// Se sua projeção de IPCA > 7,04% → prefira IPCA+</span><br>
+                    <span class="comment">// Se sua projeção de IPCA < 7,04% → prefira Prefixado</span>
+                </div>
+
+                <!-- TABELA 2 — INFLAÇÃO IMPLÍCITA -->
+                <div class="table-wrapper">
+                    <div class="table-header">
+                        <span class="table-header-title">Tabela 2 — Inflação Implícita por Vértice (ETTJ)</span>
+                        <span class="live-badge" style="color:#fcd34d">
+                            <span style="width:7px;height:7px;border-radius:50%;background:#fcd34d;display:inline-block"></span>
+                            Referência (ANBIMA)
+                        </span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Vértice (Dias Úteis)</th>
+                                <th>Taxa Prefixada (% a.a.)</th>
+                                <th>Taxa Real IPCA (% a.a.)</th>
+                                <th>Inflação Implícita</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>252 (1 ano)</td><td>13,81%</td><td>8,60%</td><td class="td-live">4,80%</td></tr>
+                            <tr><td>504 (2 anos)</td><td>13,55%</td><td>8,02%</td><td class="td-live">5,12%</td></tr>
+                            <tr><td>1.260 (5 anos)</td><td>13,96%</td><td>7,95%</td><td class="td-live">5,57%</td></tr>
+                            <tr><td>2.520 (10 anos)</td><td>14,15%</td><td>7,57%</td><td class="td-live">6,12%</td></tr>
+                        </tbody>
+                    </table>
+                    <div style="padding:0.5rem 1rem;background:#f8fafc;border-top:1px solid var(--border);font-size:0.7rem;color:var(--slate)">
+                        Fonte: ANBIMA — Curvas de Fechamento · Dados de referência (mar/2026). Atualizável via API ANBIMA em versões futuras.
+                    </div>
+                </div>
+            </section>
+
+            <!-- ══════════ 3. TESOURO ══════════ -->
+            <section class="section" id="s3">
+                <div class="section-number">Seção 3</div>
+                <h2>Títulos do Tesouro Nacional: A Base da Carteira</h2>
+                <p>O Tesouro Direto é o programa de menor risco de crédito do país. A estruturação da cesta deve considerar as diferentes características de cada título para equilibrar liquidez e rentabilidade.</p>
+
+                <h3>Tesouro Selic (LFT)</h3>
+                <p>Pós-fixado por excelência. Acompanha a variação da Selic acrescida de pequeno ágio/deságio. Recomendado para reserva de emergência e em momentos de alta ou manutenção de juros elevados. <strong>Baixa volatilidade</strong> permite resgate antecipado com perdas mínimas.</p>
+
+                <h3>Tesouro Prefixado (LTN e NTN-F)</h3>
+                <p>Rentabilidade conhecida no momento da compra. Ideal quando a inflação está controlada e há expectativa de queda de juros — o que gera <strong>valorização do PU via marcação a mercado</strong>. Em cenários de alta inesperada da inflação, o rendimento real pode ser severamente erodido.</p>
+
+                <h3>Tesouro IPCA+ (NTN-B e NTN-B Principal)</h3>
+                <p>Proteção direta contra inflação: garante taxa de juros real acima da variação do IPCA. O mais indicado para <strong>investimentos de longo prazo</strong> (aposentadoria). Títulos de longa duration possuem alta sensibilidade às oscilações da curva de juros.</p>
+
+                <h3>Tesouro RendA+ e Educa+</h3>
+                <p>Títulos com fase de acumulação seguida por parcelas mensais corrigidas pela inflação (240 meses para RendA+). Permitem personalizar o fluxo de caixa futuro alinhado a metas de vida — previdência complementar ou ciclos educacionais.</p>
+
+                <div class="callout callout-green">
+                    <strong>Regra prática:</strong> Compare sempre a inflação implícita do mercado com sua projeção pessoal de IPCA. Se você acredita em inflação mais alta do que o mercado precificou, o IPCA+ é matematicamente superior ao Prefixado para o mesmo vencimento.
+                </div>
+            </section>
+
+            <!-- ══════════ 4. CDB / LCI / LCA ══════════ -->
+            <section class="section" id="s4">
+                <div class="section-number">Seção 4</div>
+                <h2>Crédito Bancário e Isenções Fiscais: CDB, LCI e LCA</h2>
+                <p>Além dos títulos públicos, a cesta deve incluir crédito privado bancário — que oferece prêmios de risco adicionais. A chave é normalizar as rentabilidades antes de comparar.</p>
+
+                <h3>CDB — Certificado de Depósito Bancário</h3>
+                <p>Instrumento tradicional de captação. Grandes bancos (ex.: Itaú) oferecem CDBs com liquidez diária a 100% CDI — o <strong>patamar mínimo de aceitabilidade</strong> para a parcela de liquidez. Bancos médios via corretoras podem apresentar 110-115% CDI, compensando maior risco de crédito ou menor liquidez.</p>
+
+                <h3>LCI e LCA — O Poder da Isenção Fiscal</h3>
+                <p>Isentas de IR para pessoas físicas. Essa isenção as torna extremamente competitivas. A legislação recente aumentou os prazos mínimos de carência (lock-up), o que reduziu a liquidez no curto prazo — fator que deve ser incorporado à análise de duration da carteira.</p>
+
+                <!-- TABELA 3 — COMPARATIVO ATIVOS -->
+                <div class="table-wrapper">
+                    <div class="table-header">
+                        <span class="table-header-title">Tabela 3 — Comparativo: Tributação, Liquidez e Garantia</span>
+                        <span class="live-badge" style="color:#fcd34d">
+                            <span style="width:7px;height:7px;border-radius:50%;background:#fcd34d;display:inline-block"></span>
+                            Estática (conceitual)
+                        </span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ativo</th>
+                                <th>Tributação (IR)</th>
+                                <th>Liquidez Típica</th>
+                                <th>Garantia FGC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Tesouro Direto</td>
+                                <td>Tabela Regressiva</td>
+                                <td class="td-muted">D+0 ou D+1</td>
+                                <td><span style="color:var(--green);font-weight:700">Soberana</span></td>
+                            </tr>
+                            <tr>
+                                <td>CDB</td>
+                                <td>Tabela Regressiva</td>
+                                <td class="td-muted">Diária a Vencimento</td>
+                                <td><span style="color:var(--blue);font-weight:700">Sim (até R$ 250k)</span></td>
+                            </tr>
+                            <tr>
+                                <td>LCI / LCA</td>
+                                <td><span style="color:var(--green);font-weight:700">Isento</span></td>
+                                <td class="td-muted">Mín. 90–184 dias</td>
+                                <td><span style="color:var(--blue);font-weight:700">Sim (até R$ 250k)</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="callout callout-blue">
+                    <strong>FGC como ferramenta de otimização:</strong> O limite de R$ 250.000 por CPF por instituição permite diversificar entre bancos médios para capturar prêmios de risco sem elevar proporcionalmente o risco de perda total. O limite global é R$ 1.000.000 a cada 4 anos.
+                </div>
+            </section>
+
+            <!-- ══════════ 5. TRIBUTAÇÃO ══════════ -->
+            <section class="section" id="s5">
+                <div class="section-number">Seção 5</div>
+                <h2>Tributação e Matemática Financeira para Comparação</h2>
+                <p>Para estruturar a cesta com eficiência, é obrigatório normalizar rentabilidades de títulos tributados e isentos. Nunca compare taxas nominais diretamente — compare sempre a <strong>rentabilidade líquida projetada</strong> para o prazo da aplicação.</p>
+
+                <!-- TABELA 4 — IR REGRESSIVO -->
+                <div class="table-wrapper">
+                    <div class="table-header">
+                        <span class="table-header-title">Tabela 4 — Tabela Regressiva do IR em Renda Fixa</span>
+                        <span class="live-badge" style="color:#fcd34d">
+                            <span style="width:7px;height:7px;border-radius:50%;background:#fcd34d;display:inline-block"></span>
+                            Legislação vigente
+                        </span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Prazo da Aplicação</th>
+                                <th>Alíquota de IR</th>
+                                <th>Impacto Prático</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Até 180 dias</td>
+                                <td><span style="color:var(--red);font-weight:700">22,5%</span></td>
+                                <td class="td-muted">Máxima — evite resgates curtos</td>
+                            </tr>
+                            <tr>
+                                <td>181 a 360 dias</td>
+                                <td><span style="color:#b45309;font-weight:700">20,0%</span></td>
+                                <td class="td-muted">Alta — planeje o prazo</td>
+                            </tr>
+                            <tr>
+                                <td>361 a 720 dias</td>
+                                <td><span style="color:#0369a1;font-weight:700">17,5%</span></td>
+                                <td class="td-muted">Moderada — zona intermediária</td>
+                            </tr>
+                            <tr>
+                                <td>Acima de 720 dias</td>
+                                <td><span style="color:var(--green);font-weight:700">15,0%</span></td>
+                                <td class="td-muted">Mínima — ideal para longo prazo</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="padding:0.5rem 1rem;background:#fff7ed;border-top:1px solid #fed7aa;font-size:0.75rem;color:#92400e">
+                        ⚠️ <strong>IOF:</strong> Resgates em menos de 30 dias incidem IOF regressivo — de 96% no 1º dia até 0% no 30º dia. Resgates prematuros são extremamente onerosos.
+                    </div>
+                </div>
+
+                <h3>Cálculo do Gross-Up</h3>
+                <p>O Gross-Up transforma a taxa de um investimento isento (LCA) na taxa equivalente de um investimento tributado (CDB) para fins de comparação:</p>
+
+                <div class="formula-box">
+                    <span class="comment">// Fórmula do Gross-Up</span><br>
+                    <span class="var">taxa_CDB_equivalente</span> <span class="eq">=</span> <span class="var">taxa_LCA</span> / (1 − <span class="var">alíquota_IR</span>)<br><br>
+                    <span class="comment">// Exemplo: LCA 90% CDI em 12 meses (IR = 20%)</span><br>
+                    <span class="var">CDB_equiv</span> <span class="eq">=</span> 0,90 / (1 − 0,20) <span class="eq">=</span> <strong style="color:#4ade80">112,5% CDI</strong><br><br>
+                    <span class="comment">// Um CDB que ofereça menos de 112,5% CDI perde para essa LCA</span>
+                </div>
+
+                <div class="callout callout-amber">
+                    <strong>Regra de ouro:</strong> Sempre aplique o Gross-Up antes de aceitar qualquer oferta do seu gerente. A isenção de IR de uma LCA de 90% CDI equivale a um CDB de 112,5% CDI em 12 meses — uma diferença que os bancos raramente destacam.
+                </div>
+            </section>
+
+            <!-- ══════════ 6. CONJUNTURA INTERNACIONAL ══════════ -->
+            <section class="section" id="s6">
+                <div class="section-number">Seção 6</div>
+                <h2>Conjuntura Internacional e o Diferencial de Juros</h2>
+                <p>O diferencial entre a taxa Selic e a <strong>Fed Funds Rate</strong> é um dos principais determinantes do fluxo de capital estrangeiro e, consequentemente, da taxa de câmbio. O investidor de renda fixa não pode ignorar esse nexo.</p>
+
+                <h3>O Federal Reserve e o PCE</h3>
+                <p>A inflação americana medida pelo <strong>PCE</strong> (Personal Consumption Expenditures) dita o ritmo do Fed. Quando o Fed sinaliza cortes mais lentos, o dólar se fortalece globalmente — gerando pressão inflacionária adicional no Brasil via importações, o que pode forçar o Banco Central a manter a Selic elevada por mais tempo, prejudicando os títulos prefixados e favorecendo os pós-fixados.</p>
+
+                <h3>Geopolítica e Commodities</h3>
+                <p>Conflitos internacionais impactam o preço do petróleo e de outras commodities. O Brasil, exportador de commodities mas importador de derivados de petróleo, sofre dupla pressão: volatilidade de receita e pressão inflacionária doméstica. O conjunto de ferramentas deve incorporar feeds de notícias globais para ajustar premissas de inflação de curto prazo.</p>
+
+                <div class="callout callout-red">
+                    <strong>Risco de 2026:</strong> A persistência de inflação acima da meta nos EUA pode manter a Fed Funds Rate elevada por mais tempo, fortalecendo o dólar e elevando o câmbio. Isso pressiona o IPCA brasileiro, favorecendo o Tesouro IPCA+ em detrimento dos prefixados.
+                </div>
+            </section>
+
+            <!-- ══════════ 7. CESTA ══════════ -->
+            <section class="section" id="s7">
+                <div class="section-number">Seção 7</div>
+                <h2>Estruturação Prática da Cesta de Produtos</h2>
+                <p>Com base nos fundamentos analisados, a estruturação de uma cesta de renda fixa para 2026 deve seguir uma lógica de <strong>diversificação estratégica por objetivo</strong> — não apenas por rentabilidade nominal.</p>
+
+                <div class="alloc-grid">
+                    <div class="alloc-card" style="border-top: 3px solid #3b82f6;">
+                        <div class="alloc-pct" style="color:#1d4ed8">25%</div>
+                        <div class="alloc-label">Reserva de Liquidez</div>
+                        <div class="alloc-desc">Tesouro Selic + CDB liquidez diária. Flexibilidade para aproveitar oportunidades futuras sem risco de marcação a mercado.</div>
+                    </div>
+                    <div class="alloc-card" style="border-top: 3px solid #059669;">
+                        <div class="alloc-pct" style="color:#065f46">40%</div>
+                        <div class="alloc-label">Proteção contra Inflação</div>
+                        <div class="alloc-desc">Tesouro IPCA+ 2029 e 2035 + LCAs isentas. Manutenção do poder de compra real com inflação acima do centro da meta.</div>
+                    </div>
+                    <div class="alloc-card" style="border-top: 3px solid #7c3aed;">
+                        <div class="alloc-pct" style="color:#5b21b6">25%</div>
+                        <div class="alloc-label">Aposta em Ganho Real</div>
+                        <div class="alloc-desc">Prefixados 2026/2027 + CDBs prefixados de bancos médios. Captura da Selic elevada antes do ciclo de cortes projetado.</div>
+                    </div>
+                    <div class="alloc-card" style="border-top: 3px solid #d97706;">
+                        <div class="alloc-pct" style="color:#92400e">10%</div>
+                        <div class="alloc-label">Tático e Alternativo</div>
+                        <div class="alloc-desc">Debêntures incentivadas ou CRIs/CRAs isentos. Diversificação além do risco bancário, capturando spreads de crédito corporativo.</div>
+                    </div>
+                </div>
+
+                <h3>Monitoramento e Rebalanceamento</h3>
+                <p>O processo decisório não termina na compra. Acompanhe periodicamente o desempenho da carteira em relação ao benchmark (CDI). Se o CDI acumulado em 12 meses for de 14,5% e a carteira render 13%, reavalie se as taxas cobradas pelo emissor ou o spread de crédito privado estão pesando excessivamente no retorno líquido — e use o <strong>Validador de Ofertas</strong> do dashboard para checar se existem alternativas mais vantajosas disponíveis.</p>
+
+                <div class="callout callout-green">
+                    <strong>Recomendação final:</strong> O investidor de elite em 2026 não é quem busca apenas a maior taxa — é quem constrói um sistema capaz de interpretar o mercado e reagir com agilidade tecnológica. Com juros nominais elevados e ciclo de flexibilização no horizonte, a janela de oportunidade é única.
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <footer>
+        <p>Dados macroeconômicos: <a href="https://api.bcb.gov.br" target="_blank">API SGS — Banco Central do Brasil</a> · ANBIMA · Tesouro Nacional</p>
+        <p style="margin-top:0.5rem">Este documento é de caráter educativo e não constitui recomendação de investimento.</p>
+    </footer>
+
+    <script>
+    // ═══════════════════════════════════════════
+    //  ENGINE — BACEN SGS API (CORS aberto)
+    //  Séries utilizadas:
+    //  432  → Meta Selic (% a.a.)
+    //  13522 → IPCA acumulado 12 meses
+    //  4380 → PIB — Projeção Focus ano atual
+    //  1    → Taxa de câmbio USD/BRL (PTAX compra)
+    // ═══════════════════════════════════════════
+    const SGS = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs';
+
+    async function fetchSGS(serie) {
+        const url = `${SGS}.${serie}/dados/ultimos/1?formato=json`;
+        const r   = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        return { valor: d[0].valor, data: d[0].data };
+    }
+
+    async function loadMacro() {
+        const dot    = document.getElementById('t1-dot');
+        const status = document.getElementById('t1-status');
+
+        try {
+            const [selic, ipca, pib, cambio] = await Promise.all([
+                fetchSGS(432),
+                fetchSGS(13522),
+                fetchSGS(4380),
+                fetchSGS(1)
+            ]);
+
+            // Preenche células
+            setText('t1-selic',  parseFloat(selic.valor).toFixed(2)  + '% a.a.');
+            setText('t1-ipca',   parseFloat(ipca.valor).toFixed(2)   + '% (12m)');
+            setText('t1-pib',    parseFloat(pib.valor).toFixed(2)    + '% a.a.');
+            setText('t1-cambio', 'R$ ' + parseFloat(cambio.valor).toFixed(4));
+
+            dot.className = 'live-dot ok';
+            status.innerText = 'Ao vivo — BACEN SGS';
+            document.getElementById('t1-updated').innerText =
+                'Atualizado em ' + new Date().toLocaleString('pt-BR', {
+                    day:'2-digit', month:'2-digit', year:'numeric',
+                    hour:'2-digit', minute:'2-digit'
+                });
+
+        } catch (err) {
+            console.warn('BACEN API indisponível:', err);
+            dot.className = 'live-dot err';
+            status.innerText = 'Falha — exibindo referência (mar/2026)';
+
+            setText('t1-selic',  '15,00% a.a.');
+            setText('t1-ipca',   '~4,00% (12m)');
+            setText('t1-pib',    '~1,82% a.a.');
+            setText('t1-cambio', '~R$ 5,80');
+        }
+    }
+
+    function setText(id, text) {
+        const el = document.getElementById(id);
+        el.innerHTML = text;
+    }
+
+    // ═══════════════════════════════════════════
+    //  SUMÁRIO ATIVO (highlight ao rolar)
+    // ═══════════════════════════════════════════
+    function initTOC() {
+        const sections = document.querySelectorAll('.section');
+        const links    = document.querySelectorAll('.toc-link');
+
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    links.forEach(l => l.classList.remove('active'));
+                    const id = entry.target.id;
+                    const active = document.querySelector(`.toc-link[href="#${id}"]`);
+                    if (active) active.classList.add('active');
+                }
+            });
+        }, { rootMargin: '-30% 0px -60% 0px' });
+
+        sections.forEach(s => observer.observe(s));
+    }
+
+    // ═══════════════════════════════════════════
+    //  INIT
+    // ═══════════════════════════════════════════
+    window.addEventListener('DOMContentLoaded', () => {
+        loadMacro();
+        initTOC();
+    });
+    </script>
+</body>
+</html>

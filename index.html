@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GUIA RENDA FIXA — Aplique Você Mesmo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; }
+
+        /* ── Popup de ajuda ── */
+        .hq-popup {
+            visibility: hidden; opacity: 0; transition: opacity 0.2s, transform 0.2s;
+            background: white; border: 2px solid black; border-radius: 12px;
+            box-shadow: 6px 6px 0px black; z-index: 100; padding: 1rem;
+            position: absolute; width: 280px; font-size: 0.8rem; color: black;
+            top: 100%; left: 0; margin-top: 8px;
+        }
+        .hover-area:hover .hq-popup { visibility: visible; opacity: 1; transform: translateY(-4px); }
+
+        /* ── Navegação ── */
+        .nav-btn { transition: background 0.15s, color 0.15s; color: #94a3b8; }
+        .nav-btn.active { background: #2563eb; color: white; }
+        .nav-btn:not(.active):hover { background: #1e293b; color: white; }
+
+        /* ── Abas ── */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.25s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ── Skeleton loader ── */
+        .skeleton {
+            background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s infinite;
+            border-radius: 8px;
+            display: inline-block;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* ── Badge de status da API ── */
+        .api-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .api-dot.loading { background: #f59e0b; animation: pulse 1s infinite; }
+        .api-dot.ok  { background: #10b981; }
+        .api-dot.err { background: #ef4444; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+        /* ── Tabela Tesouro ── */
+        .tesouro-row { transition: background 0.15s; }
+        .tesouro-row:hover { background: #f0f9ff; }
+
+        /* ── Slider customizado ── */
+        input[type="range"] { -webkit-appearance: none; height: 6px; border-radius: 999px; background: #e2e8f0; outline: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #2563eb; cursor: pointer; box-shadow: 0 0 0 3px rgba(37,99,235,0.2); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- ══════════════════════════ HEADER ══════════════════════════ -->
+    <header class="bg-black text-white p-4 shadow-xl sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-600 border-2 border-white flex items-center justify-center font-bold text-sm">RF</div>
+                <div>
+                    <h1 class="text-base font-extrabold uppercase leading-tight">GUIA RENDA FIXA — <span class="text-blue-400 normal-case">Aplique Você Mesmo</span></h1>
+                    <div class="flex items-center gap-2 text-[10px] text-slate-400">
+                        <span id="api-dot" class="api-dot loading"></span>
+                        <span id="api-status">Carregando dados do mercado...</span>
+                        <span id="api-timestamp" class="hidden"></span>
+                    </div>
+                </div>
+            </div>
+            <nav class="flex gap-1 bg-slate-900 p-1 rounded-lg">
+                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn active px-3 py-2 text-xs font-bold rounded">Neste Momento</button>
+                <button onclick="switchTab('validador')" id="nav-validador" class="nav-btn px-3 py-2 text-xs font-bold rounded">Validador de Ofertas</button>
+                <button onclick="switchTab('mtm')" id="nav-mtm" class="nav-btn px-3 py-2 text-xs font-bold rounded">Marcação a Mercado</button>
+                <span class="w-px bg-slate-700 mx-1"></span>
+                <a href="base-teorica.html" class="nav-btn px-3 py-2 text-xs font-bold rounded text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" style="text-decoration:none">Base Teórica ↗</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-6 w-full grow">
+
+        <!-- ══════════════════ ABA 1 — DASHBOARD MACRO ══════════════════ -->
+        <div id="tab-dashboard" class="tab-content active">
+
+            <!-- Cards macro -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-3xl border shadow-sm hover-area relative">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Meta Selic</span>
+                    <div id="selic-val" class="text-4xl font-black mt-1 skeleton h-10 w-32">　</div>
+                    <div class="hq-popup">Taxa básica da economia. Define o rendimento do CDI e do Tesouro Selic.</div>
+                </div>
+                <div class="bg-white p-6 rounded-3xl border shadow-sm hover-area relative">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">IPCA (Proj. 12m)</span>
+                    <div id="ipca-val" class="text-4xl font-black mt-1 skeleton h-10 w-32">　</div>
+                    <div class="hq-popup">Inflação oficial. Se seu título rende menos que isso, você está perdendo poder de compra.</div>
+                </div>
+                <div class="bg-white p-6 rounded-3xl border shadow-sm hover-area relative">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Juro Real</span>
+                    <div id="real-val" class="text-4xl font-black text-emerald-600 mt-1 skeleton h-10 w-32">　</div>
+                    <div class="hq-popup">O que sobra de verdade no seu bolso após descontar a inflação. Calculado como (1+Selic)/(1+IPCA)−1.</div>
+                </div>
+            </div>
+
+            <!-- Banner de erro da API -->
+            <div id="api-error-banner" class="hidden mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm flex items-center gap-3">
+                <span class="text-xl">⚠️</span>
+                <div>
+                    <strong>Falha ao conectar com a API.</strong> Exibindo valores de referência. 
+                    <button onclick="loadData()" class="underline ml-1">Tentar novamente</button>
+                </div>
+            </div>
+
+            <!-- Gráfico curva DI -->
+            <div class="bg-white p-8 rounded-[40px] border mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="font-bold text-lg">Curva DI Futura (ETTJ)</h3>
+                    <span id="chart-source" class="text-xs text-slate-400">Fonte: simulação</span>
+                </div>
+                <div style="height: 280px;"><canvas id="yieldChart"></canvas></div>
+            </div>
+
+            <!-- Tabela Tesouro Direto -->
+            <div class="bg-white rounded-3xl border overflow-hidden">
+                <div class="p-6 border-b flex justify-between items-center">
+                    <h3 class="font-bold text-lg">Tesouro Direto — Taxas de Hoje</h3>
+                    <span id="tesouro-data" class="text-xs text-slate-400"></span>
+                </div>
+                <div id="tesouro-table" class="overflow-x-auto">
+                    <!-- preenchido pelo JS -->
+                    <div class="p-8 text-center text-slate-400 text-sm">
+                        <div class="skeleton h-4 w-48 mx-auto mb-3">　</div>
+                        <div class="skeleton h-4 w-64 mx-auto mb-3">　</div>
+                        <div class="skeleton h-4 w-56 mx-auto">　</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════ ABA 2 — VALIDADOR ══════════════════ -->
+        <div id="tab-validador" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-8 rounded-3xl border">
+                    <h3 class="font-bold text-xl mb-1">O que o Gerente ofereceu?</h3>
+                    <p class="text-sm text-slate-400 mb-6">Insira a oferta e veja se vale a pena frente ao Tesouro Direto.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 uppercase">Tipo de título</label>
+                            <select id="offer-type" onchange="checkCOE()" class="mt-1 w-full p-4 bg-slate-50 border rounded-xl font-semibold">
+                                <option value="CDB_CDI">CDB / LC — % do CDI</option>
+                                <option value="CDB_AA">CDB / LC — % ao ano</option>
+                                <option value="LCI">LCI / LCA — % CDI (Isento IR)</option>
+                                <option value="LCI_AA">LCI / LCA — % ao ano (Isento IR)</option>
+                                <option value="COE">COE (Certificado de Operações Estruturadas)</option>
+                            </select>
+                        </div>
+
+                        <div id="coe-alert" class="hidden p-4 bg-orange-50 border border-orange-200 text-orange-800 text-xs rounded-xl">
+                            <strong>⚠️ ATENÇÃO COE:</strong> Taxas ocultas elevadas, sem garantia do FGC em vários casos, e risco real de rendimento <strong>ZERO</strong> após 5 anos. Compare sempre com o Tesouro IPCA+.
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 uppercase">Taxa oferecida</label>
+                            <div class="relative mt-1">
+                                <input type="number" id="offer-rate" placeholder="Ex: 110 (para % CDI) ou 12 (para % a.a.)" step="0.1"
+                                    class="w-full p-4 bg-slate-50 border rounded-xl pr-16">
+                                <span id="offer-unit" class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">% CDI</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 uppercase">Prazo (anos)</label>
+                            <select id="offer-prazo" class="mt-1 w-full p-4 bg-slate-50 border rounded-xl font-semibold">
+                                <option value="1">1 ano</option>
+                                <option value="2">2 anos</option>
+                                <option value="3" selected>3 anos</option>
+                                <option value="5">5 anos</option>
+                            </select>
+                        </div>
+
+                        <button onclick="validateOffer()"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold transition-colors">
+                            Comparar com Tesouro Direto →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Resultado -->
+                <div id="validation-result" class="bg-slate-900 text-white p-8 rounded-3xl flex flex-col justify-center">
+                    <p class="text-slate-400 uppercase text-xs font-bold mb-4 text-center">Veredito</p>
+                    <div id="verdict-icon" class="text-5xl text-center mb-3">🔍</div>
+                    <div id="verdict-text" class="text-xl font-bold text-center mb-6 text-slate-300">Aguardando dados...</div>
+                    <div id="verdict-details" class="space-y-3 hidden">
+                        <div class="bg-slate-800 rounded-2xl p-4 text-sm">
+                            <div class="text-slate-400 text-xs mb-2 uppercase font-bold">Sua oferta (líquida)</div>
+                            <div id="v-oferta" class="text-2xl font-black text-white"></div>
+                        </div>
+                        <div class="bg-slate-800 rounded-2xl p-4 text-sm">
+                            <div class="text-slate-400 text-xs mb-2 uppercase font-bold">Melhor Tesouro equivalente</div>
+                            <div id="v-tesouro-nome" class="font-bold text-blue-400 mb-1"></div>
+                            <div id="v-tesouro-taxa" class="text-2xl font-black text-white"></div>
+                        </div>
+                        <div id="v-conclusao" class="rounded-2xl p-4 text-sm font-semibold text-center"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════ ABA 3 — MARCAÇÃO A MERCADO ══════════════════ -->
+        <div id="tab-mtm" class="tab-content">
+            <div class="bg-white p-8 rounded-3xl border max-w-2xl mx-auto">
+                <h3 class="font-bold text-xl mb-1 text-center">Simulador de Preço a Mercado</h3>
+                <p class="text-sm text-slate-400 text-center mb-8">Se você vender antes do vencimento, o preço varia conforme os juros.</p>
+                <div class="space-y-6">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-bold uppercase text-slate-500">Taxa na sua compra (%)</label>
+                            <span id="buy-label" class="text-sm font-black text-blue-600">6,0%</span>
+                        </div>
+                        <input type="range" id="mtm-buy" min="3" max="14" step="0.1" value="6.0" oninput="calcMtM()" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-bold uppercase text-slate-500">Taxa hoje no mercado (%)</label>
+                            <span id="market-label" class="text-sm font-black text-slate-700">6,0%</span>
+                        </div>
+                        <input type="range" id="mtm-market" min="3" max="14" step="0.1" value="6.0" oninput="calcMtM()" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-bold uppercase text-slate-500">Duration do título (anos)</label>
+                            <span id="dur-label" class="text-sm font-black text-slate-700">7,5 anos</span>
+                        </div>
+                        <input type="range" id="mtm-dur" min="1" max="20" step="0.5" value="7.5" oninput="calcMtM()" class="w-full">
+                        <p class="text-xs text-slate-400 mt-1">Curto prazo ≈ 1-3 anos • Tesouro IPCA+ 2035 ≈ 7-8 anos • Longo prazo ≈ 15-20 anos</p>
+                    </div>
+
+                    <div class="bg-slate-50 rounded-2xl p-6 text-center">
+                        <div id="mtm-display" class="text-6xl font-black text-blue-600 mb-2">0,00%</div>
+                        <p id="mtm-desc" class="text-sm text-slate-500">Sem variação</p>
+                    </div>
+
+                    <div id="mtm-explainer" class="text-xs text-slate-400 bg-slate-50 rounded-xl p-4 hidden">
+                        📌 <strong>Por quê?</strong> Quando os juros de mercado <span id="mtm-why"></span>, o preço do título <span id="mtm-what"></span> — quem comprou antes <span id="mtm-who"></span>.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="text-center text-xs text-slate-400 py-6">
+        Dados: <a href="https://www.bcb.gov.br" target="_blank" class="underline">Banco Central do Brasil</a> e 
+        <a href="https://www.tesourodireto.com.br" target="_blank" class="underline">Tesouro Direto</a>. 
+        Este guia é educativo e não constitui recomendação de investimento.
+    </footer>
+
+    <script>
+    // ═══════════════════════════════════════════════════════════
+    //  CONFIGURAÇÃO
+    // ═══════════════════════════════════════════════════════════
+    // DEV local  → 'http://localhost:8000/api/mercado'
+    // Produção   → 'https://rf.bizi.net.br/api/mercado'
+    const API_URL = 'http://localhost:8000/api/mercado';
+
+    let state = {
+        loaded: false,
+        error: false,
+        macro: { selic: 10.50, ipca_proj: 3.90, juro_real: 6.35 },
+        tesouro: []
+    };
+
+    let chartInstance = null;
+
+    // ═══════════════════════════════════════════════════════════
+    //  CARREGAMENTO DE DADOS
+    // ═══════════════════════════════════════════════════════════
+    async function loadData() {
+        setApiStatus('loading', 'Carregando dados do mercado...');
+        hideError();
+
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+
+            const res = await fetch(API_URL, { signal: controller.signal });
+            clearTimeout(timeout);
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const data = await res.json();
+
+            state.macro   = data.macro;
+            state.tesouro = data.tesouro || [];
+            state.loaded  = true;
+            state.error   = false;
+
+            setApiStatus('ok', `Dados atualizados às ${new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}`);
+        } catch (err) {
+            console.warn('API indisponível, usando valores de referência.', err);
+            state.error = true;
+            setApiStatus('err', 'Falha na API — exibindo valores de referência');
+            showError();
+        }
+
+        renderAll();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  RENDER COMPLETO
+    // ═══════════════════════════════════════════════════════════
+    function renderAll() {
+        renderMacro();
+        renderChart();
+        renderTesouro();
+    }
+
+    // ── Macro cards ──
+    function renderMacro() {
+        const { selic, ipca_proj, juro_real } = state.macro;
+        setCard('selic-val', selic.toFixed(2) + '%');
+        setCard('ipca-val', ipca_proj.toFixed(2) + '%');
+        setCard('real-val', juro_real.toFixed(2) + '%');
+    }
+
+    function setCard(id, text) {
+        const el = document.getElementById(id);
+        el.classList.remove('skeleton', 'h-10', 'w-32');
+        el.innerText = text;
+    }
+
+    // ── Curva DI (usa dados reais do Tesouro para ancorar) ──
+    function renderChart() {
+        const selic = state.macro.selic;
+
+        // Monta uma curva simples a partir da Selic + spread estimado por prazo
+        const spreads = { '1a': -0.3, '2a': -0.1, '3a': 0.1, '5a': 0.5, '10a': 1.0, '20a': 1.5 };
+        const labels  = ['Hoje (CDI)', '1 ano', '2 anos', '3 anos', '5 anos', '10 anos', '20 anos'];
+        const values  = [
+            selic,
+            selic + spreads['1a'],
+            selic + spreads['2a'],
+            selic + spreads['3a'],
+            selic + spreads['5a'],
+            selic + spreads['10a'],
+            selic + spreads['20a'],
+        ];
+
+        // Se temos dados do Tesouro, ancorar os pontos com as taxas reais
+        if (state.tesouro.length > 0) {
+            const find = (keyword) => state.tesouro
+                .filter(t => t.nome.includes(keyword))
+                .sort((a,b) => a.taxa - b.taxa)[0];
+
+            const selic5 = find('Selic 2029') || find('Selic');
+            const ipca5  = find('IPCA+ 2029') || find('IPCA');
+            const ipca10 = find('IPCA+ 2035') || find('IPCA+');
+
+            if (selic5)  values[4] = selic5.taxa;
+            if (ipca5)   values[5] = ipca5.taxa  + state.macro.ipca_proj;
+            if (ipca10)  values[6] = ipca10.taxa + state.macro.ipca_proj;
+
+            document.getElementById('chart-source').innerText = 'Fonte: Tesouro Direto (dados de hoje)';
+        }
+
+        const ctx = document.getElementById('yieldChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Taxa DI / Tesouro (%)',
+                    data: values,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#2563eb',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { callbacks: {
+                    label: ctx => ` ${ctx.parsed.y.toFixed(2)}% a.a.`
+                }}},
+                scales: {
+                    y: {
+                        ticks: { callback: v => v.toFixed(1) + '%' },
+                        grid: { color: '#f1f5f9' }
+                    },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // ── Tabela Tesouro ──
+    function renderTesouro() {
+        const container = document.getElementById('tesouro-table');
+        const selic = state.macro.selic;
+
+        if (!state.tesouro || state.tesouro.length === 0) {
+            container.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm">
+                ${state.error
+                    ? '⚠️ Dados do Tesouro indisponíveis no momento.'
+                    : '✅ Nenhum título disponível para hoje.'}
+            </div>`;
+            return;
+        }
+
+        // Agrupa por tipo de título
+        const grouped = {};
+        state.tesouro.forEach(t => {
+            const key = t.nome.replace(/\s\d{4}$/, '').trim();
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(t);
+        });
+
+        let html = `<table class="w-full text-sm">
+            <thead>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase">
+                    <th class="text-left p-4 font-bold">Título</th>
+                    <th class="text-center p-4 font-bold">Vencimento</th>
+                    <th class="text-right p-4 font-bold">Taxa (a.a.)</th>
+                    <th class="text-right p-4 font-bold">vs Selic</th>
+                </tr>
+            </thead><tbody>`;
+
+        state.tesouro
+            .slice()
+            .sort((a, b) => a.taxa - b.taxa)
+            .forEach(t => {
+                const taxa = parseFloat(t.taxa);
+                const diff = taxa - selic;
+                const diffStr = (diff >= 0 ? '+' : '') + diff.toFixed(2) + '%';
+                const diffColor = diff >= 0 ? 'text-emerald-600' : 'text-red-500';
+                const venc = formatDate(t.vencimento);
+                const nomeShort = t.nome.replace('Tesouro ', '');
+
+                html += `<tr class="tesouro-row border-t">
+                    <td class="p-4 font-semibold">${nomeShort}</td>
+                    <td class="p-4 text-center text-slate-500">${venc}</td>
+                    <td class="p-4 text-right font-black text-blue-700">${taxa.toFixed(2)}%</td>
+                    <td class="p-4 text-right font-bold ${diffColor}">${diffStr}</td>
+                </tr>`;
+            });
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+        document.getElementById('tesouro-data').innerText = `Base: ${new Date().toLocaleDateString('pt-BR')}`;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  VALIDADOR DE OFERTAS
+    // ═══════════════════════════════════════════════════════════
+    function checkCOE() {
+        const type = document.getElementById('offer-type').value;
+        document.getElementById('coe-alert').classList.toggle('hidden', type !== 'COE');
+
+        const unitEl = document.getElementById('offer-unit');
+        if (type.endsWith('_AA') || type === 'COE') unitEl.innerText = '% a.a.';
+        else unitEl.innerText = '% CDI';
+    }
+
+    function validateOffer() {
+        const type  = document.getElementById('offer-type').value;
+        const rate  = parseFloat(document.getElementById('offer-rate').value);
+        const prazo = parseInt(document.getElementById('offer-prazo').value);
+        const { selic, ipca_proj } = state.macro;
+
+        if (isNaN(rate) || rate <= 0) {
+            document.getElementById('verdict-text').innerText = 'Por favor, informe uma taxa válida.';
+            document.getElementById('verdict-icon').innerText = '❓';
+            return;
+        }
+
+        // ── Calcula taxa bruta e líquida da oferta ──
+        let brutaAnual, liquidaAnual, nomeTipo;
+        const irAliquota = prazo <= 1 ? 0.225 : prazo <= 2 ? 0.20 : prazo <= 4 ? 0.175 : 0.15;
+
+        switch(type) {
+            case 'CDB_CDI':
+                brutaAnual  = (rate / 100) * selic;
+                liquidaAnual = brutaAnual * (1 - irAliquota);
+                nomeTipo = `CDB ${rate}% CDI`;
+                break;
+            case 'CDB_AA':
+                brutaAnual  = rate;
+                liquidaAnual = brutaAnual * (1 - irAliquota);
+                nomeTipo = `CDB ${rate}% a.a.`;
+                break;
+            case 'LCI':
+                brutaAnual  = (rate / 100) * selic;
+                liquidaAnual = brutaAnual; // isento
+                nomeTipo = `LCI/LCA ${rate}% CDI`;
+                break;
+            case 'LCI_AA':
+                brutaAnual  = rate;
+                liquidaAnual = brutaAnual; // isento
+                nomeTipo = `LCI/LCA ${rate}% a.a.`;
+                break;
+            case 'COE':
+                brutaAnual  = rate || 0;
+                liquidaAnual = brutaAnual * (1 - 0.15);
+                nomeTipo = `COE ${rate}% a.a.`;
+                break;
+        }
+
+        // ── Melhor Tesouro equivalente ──
+        const tesouroSelic = { nome: 'Tesouro Selic', taxa: selic * 0.85 }; // líquido estimado
+        const tesouroIPCA  = state.tesouro.find(t => t.nome.includes('IPCA') && !t.nome.includes('Renda+'))
+                          || { nome: 'Tesouro IPCA+', taxa: selic - ipca_proj };
+
+        const melhorTesouro = liquidaAnual > tesouroSelic.taxa
+            ? null
+            : tesouroSelic;
+
+        // ── Veredito ──
+        let icon, texto, cor;
+        if (type === 'COE') {
+            icon  = '🚫';
+            texto = 'COEs raramente beneficiam o investidor. Evite.';
+            cor   = 'bg-red-900 text-red-200';
+        } else if (liquidaAnual >= selic * 0.85) {
+            icon  = '✅';
+            texto = 'Oferta competitiva! Mas verifique liquidez e FGC.';
+            cor   = 'bg-emerald-900 text-emerald-200';
+        } else if (liquidaAnual >= selic * 0.75) {
+            icon  = '⚠️';
+            texto = 'Abaixo do Tesouro Selic líquido. Negocie a taxa.';
+            cor   = 'bg-yellow-900 text-yellow-200';
+        } else {
+            icon  = '❌';
+            texto = 'Taxa ruim. O Tesouro Selic supera essa oferta.';
+            cor   = 'bg-red-900 text-red-200';
+        }
+
+        // ── Renderiza ──
+        document.getElementById('verdict-icon').innerText = icon;
+        document.getElementById('verdict-text').innerText = texto;
+
+        document.getElementById('v-oferta').innerText       = liquidaAnual.toFixed(2) + '% a.a. líquido';
+        document.getElementById('v-tesouro-nome').innerText = 'Tesouro Selic';
+        document.getElementById('v-tesouro-taxa').innerText = (selic * 0.85).toFixed(2) + '% a.a. líquido (est.)';
+
+        const conc = document.getElementById('v-conclusao');
+        conc.className = `rounded-2xl p-4 text-sm font-semibold text-center ${cor}`;
+        conc.innerText = liquidaAnual >= selic * 0.85
+            ? `${nomeTipo} é pelo menos tão bom quanto o Tesouro Selic.`
+            : `Tesouro Selic rende ~${((selic * 0.85) - liquidaAnual).toFixed(2)}% a.a. a mais, líquido.`;
+
+        document.getElementById('verdict-details').classList.remove('hidden');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  MARCAÇÃO A MERCADO
+    // ═══════════════════════════════════════════════════════════
+    function calcMtM() {
+        const buy    = parseFloat(document.getElementById('mtm-buy').value);
+        const market = parseFloat(document.getElementById('mtm-market').value);
+        const dur    = parseFloat(document.getElementById('mtm-dur').value);
+
+        document.getElementById('buy-label').innerText    = buy.toFixed(1).replace('.', ',') + '%';
+        document.getElementById('market-label').innerText = market.toFixed(1).replace('.', ',') + '%';
+        document.getElementById('dur-label').innerText    = dur.toFixed(1).replace('.', ',') + ' anos';
+
+        // Fórmula de Duration Modificada: ΔP/P ≈ -D* × Δy
+        const delta = market - buy;
+        const dMod  = dur / (1 + buy / 100);
+        const variacao = -dMod * (delta / 100) * 100;
+
+        const el = document.getElementById('mtm-display');
+        el.innerText = (variacao > 0 ? '+' : '') + variacao.toFixed(2).replace('.', ',') + '%';
+        el.className = `text-6xl font-black mb-2 ${variacao > 0.05 ? 'text-emerald-500' : variacao < -0.05 ? 'text-red-500' : 'text-blue-600'}`;
+
+        const desc = document.getElementById('mtm-desc');
+        const exp  = document.getElementById('mtm-explainer');
+
+        if (Math.abs(variacao) < 0.05) {
+            desc.innerText = 'Sem variação relevante';
+            exp.classList.add('hidden');
+        } else if (variacao > 0) {
+            desc.innerText = `Seu título vale mais ${variacao.toFixed(2)}% se vendido hoje`;
+            document.getElementById('mtm-why').innerText  = 'caíram';
+            document.getElementById('mtm-what').innerText = 'sobe';
+            document.getElementById('mtm-who').innerText  = 'sai ganhando';
+            exp.classList.remove('hidden');
+        } else {
+            desc.innerText = `Seu título vale menos ${Math.abs(variacao).toFixed(2)}% se vendido hoje`;
+            document.getElementById('mtm-why').innerText  = 'subiram';
+            document.getElementById('mtm-what').innerText = 'cai';
+            document.getElementById('mtm-who').innerText  = 'sai perdendo';
+            exp.classList.remove('hidden');
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  UTILITÁRIOS
+    // ═══════════════════════════════════════════════════════════
+    function switchTab(id) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-'+id).classList.add('active');
+        document.getElementById('nav-'+id).classList.add('active');
+    }
+
+    function setApiStatus(state, msg) {
+        const dot = document.getElementById('api-dot');
+        dot.className = 'api-dot ' + state;
+        document.getElementById('api-status').innerText = msg;
+    }
+
+    function showError() { document.getElementById('api-error-banner').classList.remove('hidden'); }
+    function hideError() { document.getElementById('api-error-banner').classList.add('hidden'); }
+
+    function formatDate(str) {
+        if (!str) return '—';
+        // Aceita DD/MM/YYYY ou YYYY-MM-DD
+        if (str.includes('/')) return str.slice(0, 10);
+        const [y, m, d] = str.slice(0, 10).split('-');
+        return `${d}/${m}/${y}`;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  INIT
+    // ═══════════════════════════════════════════════════════════
+    window.onload = () => {
+        calcMtM(); // inicializa slider
+        loadData();
+    };
+    </script>
+</body>
+</html>
