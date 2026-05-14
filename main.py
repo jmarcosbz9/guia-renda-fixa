@@ -57,20 +57,56 @@ def get_bacen_data(serie):
 def atualizar_tesouro():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Atualizando dados do Tesouro...")
 
-    # ── Fonte 1: API JSON oficial do Tesouro Direto (mais confiável) ──
+    # ── Fonte 1: CSV de títulos disponíveis para INVESTIR hoje ──
+    # Contém APENAS os títulos em negociação neste momento
     try:
-        url_json = (
-            "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto"
-            "/service/api/treasurybondsinfo.json"
+        url_investir = (
+            "https://www.tesourodireto.com.br/documents/d/guest/"
+            "rendimento-investir-csv?download=true"
         )
-        resp = requests.get(url_json, timeout=10,
+        resp = requests.get(url_investir, timeout=10,
                             headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
-        data = resp.json()
 
+        linhas = resp.text.strip().split('\n')
         lista = []
-        bonds = (data.get("response", {})
-                     .get("TrsrBdTradgList", []))
+        for linha in linhas[1:]:
+            partes = linha.strip().split(';')
+            if len(partes) < 3:
+                continue
+            nome = partes[0].strip().strip('"')
+            rent = partes[1].strip().strip('"')
+            venc = partes[-1].strip().strip('"').strip()
+            # Extrai só o número da rentabilidade (ex: "IPCA + 7,23%" → 7.23)
+            try:
+                num = rent.replace('%', '').split('+')[-1].strip().replace(',', '.')
+                taxa = float(num)
+            except Exception:
+                continue
+            if not nome or taxa == 0:
+                continue
+            if not nome.lower().startswith('tesouro'):
+                nome = f"Tesouro {nome}"
+            lista.append({"nome": nome, "taxa": taxa, "vencimento": venc})
+
+        if lista:
+            cache["tesouro"]       = lista
+            cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+            print(f"  ✓ {len(lista)} títulos disponíveis para investir.")
+            return
+        else:
+            print("  ✗ CSV investir vazio — tentando mirror.")
+
+    except Exception as e:
+        print(f"  ✗ Erro no CSV investir: {e} — tentando mirror.")
+
+    # ── Fonte 2: Mirror radaropcoes (espelha API oficial B3/TD) ──
+    try:
+        resp = requests.get("https://api.radaropcoes.com/bonds.json",
+                            timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        bonds = resp.json().get("response", {}).get("TrsrBdTradgList", [])
+        lista = []
         for item in bonds:
             bond = item.get("TrsrBd", {})
             nome = bond.get("nm", "")
@@ -78,85 +114,56 @@ def atualizar_tesouro():
             venc = bond.get("mtrtyDt", "")[:10]
             if not nome or not taxa:
                 continue
-            # Formata vencimento de YYYY-MM-DD para DD/MM/YYYY
             if "-" in venc:
                 y, m, d = venc.split("-")
                 venc = f"{d}/{m}/{y}"
-            lista.append({
-                "nome":       f"Tesouro {nome}",
-                "taxa":       float(taxa),
-                "vencimento": venc,
-            })
-
+            lista.append({"nome": f"Tesouro {nome}", "taxa": float(taxa),
+                          "vencimento": venc})
         if lista:
             cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            print(f"  ✓ {len(lista)} títulos carregados via JSON.")
+            print(f"  ✓ {len(lista)} títulos carregados via mirror.")
             return
-        else:
-            print("  ✗ JSON vazio — tentando CSV.")
-
+        print("  ✗ Mirror vazio — tentando CSV histórico.")
     except Exception as e:
-        print(f"  ✗ Erro no JSON: {e} — tentando CSV.")
+        print(f"  ✗ Erro no mirror: {e} — tentando CSV histórico.")
 
-    # ── Fonte 2: CSV de títulos disponíveis hoje ──
+    # ── Fonte 3: CSV histórico filtrado (última data, vencimento futuro) ──
     try:
         url_csv = (
-            "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto"
-            "/service/api/treasurybondsinfo.json"
-        )
-        # Tenta a API de preços do dia (formato diferente)
-        url_csv2 = (
             "https://www.tesourotransparente.gov.br/ckan/dataset/"
             "df56aa42-484a-4a59-8184-7676580c81e3/resource/"
             "796d2059-14e9-44e3-80c9-2d9e30b405c1/download/"
             "precotaxatesourodireto.csv"
         )
-        resp = requests.get(url_csv2, timeout=15, verify=False,
+        resp = requests.get(url_csv, timeout=15, verify=False,
                             headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
-
         df = pd.read_csv(io.StringIO(resp.text), sep=';', decimal=',')
-
-        # Converte datas para datetime para comparação correta
-        df['Data Base dt'] = pd.to_datetime(df['Data Base'], format='%d/%m/%Y', errors='coerce')
-        df['Data Venc dt'] = pd.to_datetime(df['Data Vencimento'], format='%d/%m/%Y', errors='coerce')
-
-        # Pega apenas a data mais recente
-        data_max = df['Data Base dt'].max()
-        df_hoje  = df[df['Data Base dt'] == data_max].copy()
-
-        # Filtra apenas títulos com vencimento FUTURO
-        hoje_dt = pd.Timestamp.now()
-        df_hoje = df_hoje[df_hoje['Data Venc dt'] > hoje_dt]
-
+        df['dt_base'] = pd.to_datetime(df['Data Base'],       format='%d/%m/%Y', errors='coerce')
+        df['dt_venc'] = pd.to_datetime(df['Data Vencimento'], format='%d/%m/%Y', errors='coerce')
+        df_hoje = df[df['dt_base'] == df['dt_base'].max()].copy()
+        df_hoje = df_hoje[df_hoje['dt_venc'] > pd.Timestamp.now()]
         lista = []
         for _, row in df_hoje.iterrows():
             taxa = row['Taxa Compra Manha']
             if pd.isna(taxa) or float(taxa) == 0:
                 continue
-            lista.append({
-                "nome":       row['Tipo Titulo'],
-                "taxa":       float(taxa),
-                "vencimento": row['Data Vencimento'],
-            })
-
+            lista.append({"nome": row['Tipo Titulo'], "taxa": float(taxa),
+                          "vencimento": row['Data Vencimento']})
         if lista:
             cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            print(f"  ✓ {len(lista)} títulos carregados via CSV (vencimento futuro).")
+            print(f"  ✓ {len(lista)} títulos via CSV histórico.")
             return
-        else:
-            print("  ✗ CSV sem títulos futuros — usando fallback.")
-
     except Exception as e:
-        print(f"  ✗ Erro no CSV: {e} — usando fallback.")
+        print(f"  ✗ Erro CSV histórico: {e}")
 
     # ── Fallback ──
     if not cache["tesouro"]:
         cache["tesouro"]       = TESOURO_FALLBACK
         cache["atualizado_em"] = "fallback"
-        print("  ✗ Usando dados de referência (fallback).")
+        print("  ✗ Usando fallback hardcoded.")
 
 # ─────────────────────────────────────────
 #  CRON — roda todo dia útil às 10:30 BRT
