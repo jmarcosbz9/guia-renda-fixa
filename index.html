@@ -47,9 +47,33 @@
         .api-dot.err { background: #ef4444; }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
 
-        /* ── Tabela Tesouro ── */
-        .tesouro-row { transition: background 0.15s; }
-        .tesouro-row:hover { background: #f0f9ff; }
+        /* ── Cards Tesouro ── */
+        .filtro-btn { color: #64748b; transition: all 0.15s; }
+        .filtro-btn.active { background: white; color: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+        .tesouro-card {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1rem 1.25rem; border-radius: 14px; margin-bottom: 0.6rem;
+            border-left: 4px solid; transition: transform 0.15s, box-shadow 0.15s;
+            cursor: default;
+        }
+        .tesouro-card:hover { transform: translateX(3px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .tesouro-card:last-child { margin-bottom: 0; }
+        .card-selic  { background: #f0fdf4; border-color: #16a34a; }
+        .card-pre    { background: #eff6ff; border-color: #2563eb; }
+        .card-ipca   { background: #faf5ff; border-color: #7c3aed; }
+        .card-renda  { background: #fff7ed; border-color: #ea580c; }
+        .card-taxa-selic  { color: #15803d; }
+        .card-taxa-pre    { color: #1d4ed8; }
+        .card-taxa-ipca   { color: #6d28d9; }
+        .card-taxa-renda  { color: #c2410c; }
+        .card-badge {
+            font-size: 0.6rem; font-weight: 800; text-transform: uppercase;
+            letter-spacing: 0.08em; padding: 2px 8px; border-radius: 999px;
+        }
+        .badge-selic { background: #dcfce7; color: #15803d; }
+        .badge-pre   { background: #dbeafe; color: #1d4ed8; }
+        .badge-ipca  { background: #ede9fe; color: #6d28d9; }
+        .badge-renda { background: #ffedd5; color: #c2410c; }
 
         /* ── Slider customizado ── */
         input[type="range"] { -webkit-appearance: none; height: 6px; border-radius: 999px; background: #e2e8f0; outline: none; }
@@ -124,19 +148,28 @@
                 <div style="height: 280px;"><canvas id="yieldChart"></canvas></div>
             </div>
 
-            <!-- Tabela Tesouro Direto -->
+            <!-- Tesouro Direto — Cards com filtros -->
             <div class="bg-white rounded-3xl border overflow-hidden">
-                <div class="p-6 border-b flex justify-between items-center">
-                    <h3 class="font-bold text-lg">Tesouro Direto — Taxas de Hoje</h3>
-                    <span id="tesouro-data" class="text-xs text-slate-400"></span>
-                </div>
-                <div id="tesouro-table" class="overflow-x-auto">
-                    <!-- preenchido pelo JS -->
-                    <div class="p-8 text-center text-slate-400 text-sm">
-                        <div class="skeleton h-4 w-48 mx-auto mb-3">　</div>
-                        <div class="skeleton h-4 w-64 mx-auto mb-3">　</div>
-                        <div class="skeleton h-4 w-56 mx-auto">　</div>
+                <div class="p-6 border-b">
+                    <div class="flex flex-wrap justify-between items-center gap-4">
+                        <h3 class="font-bold text-lg">Tesouro Direto — Taxas de Hoje</h3>
+                        <div class="flex items-center gap-3">
+                            <span id="tesouro-data" class="text-xs text-slate-400"></span>
+                            <!-- Filtros -->
+                            <div class="flex gap-1 bg-slate-100 p-1 rounded-xl" id="tesouro-filtros">
+                                <button onclick="filtrarTesouro('todos')"   id="f-todos"    class="filtro-btn active px-3 py-1.5 text-xs font-bold rounded-lg">Todos</button>
+                                <button onclick="filtrarTesouro('selic')"   id="f-selic"    class="filtro-btn px-3 py-1.5 text-xs font-bold rounded-lg">Selic</button>
+                                <button onclick="filtrarTesouro('pre')"     id="f-pre"      class="filtro-btn px-3 py-1.5 text-xs font-bold rounded-lg">Prefixado</button>
+                                <button onclick="filtrarTesouro('ipca')"    id="f-ipca"     class="filtro-btn px-3 py-1.5 text-xs font-bold rounded-lg">Inflação</button>
+                                <button onclick="filtrarTesouro('renda')"   id="f-renda"    class="filtro-btn px-3 py-1.5 text-xs font-bold rounded-lg">Renda+</button>
+                            </div>
+                        </div>
                     </div>
+                </div>
+                <div id="tesouro-cards" class="p-6">
+                    <div class="skeleton h-24 w-full rounded-2xl mb-3">　</div>
+                    <div class="skeleton h-24 w-full rounded-2xl mb-3">　</div>
+                    <div class="skeleton h-24 w-full rounded-2xl">　</div>
                 </div>
             </div>
         </div>
@@ -403,60 +436,103 @@
         });
     }
 
-    // ── Tabela Tesouro ──
-    function renderTesouro() {
-        const container = document.getElementById('tesouro-table');
-        const selic = state.macro.selic;
+    // ── Cards Tesouro ──
+    let filtroAtivo = 'todos';
 
+    function classificar(nome) {
+        const n = nome.toLowerCase();
+        if (n.includes('renda+') || n.includes('renda +') || n.includes('educa'))
+            return 'renda';
+        if (n.includes('selic')) return 'selic';
+        if (n.includes('prefixado') || n.includes('pre fixado')) return 'pre';
+        if (n.includes('ipca') || n.includes('inflação') || n.includes('ntn-b'))
+            return 'ipca';
+        return 'pre';
+    }
+
+    const TIPO_CONFIG = {
+        selic: { label: 'Selic',      cardClass: 'card-selic',  taxaClass: 'card-taxa-selic',  badgeClass: 'badge-selic' },
+        pre:   { label: 'Prefixado',  cardClass: 'card-pre',    taxaClass: 'card-taxa-pre',    badgeClass: 'badge-pre'   },
+        ipca:  { label: 'Inflação',   cardClass: 'card-ipca',   taxaClass: 'card-taxa-ipca',   badgeClass: 'badge-ipca'  },
+        renda: { label: 'Renda+',     cardClass: 'card-renda',  taxaClass: 'card-taxa-renda',  badgeClass: 'badge-renda' },
+    };
+
+    function filtrarTesouro(filtro) {
+        filtroAtivo = filtro;
+        document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('f-' + (filtro === 'todos' ? 'todos' : filtro)).classList.add('active');
+        renderCards();
+    }
+
+    function renderTesouro() {
+        const container = document.getElementById('tesouro-cards');
         if (!state.tesouro || state.tesouro.length === 0) {
-            container.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm">
-                ${state.error
-                    ? '⚠️ Dados do Tesouro indisponíveis no momento.'
-                    : '✅ Nenhum título disponível para hoje.'}
+            container.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm">
+                ${state.error ? '⚠️ Dados do Tesouro indisponíveis no momento.' : 'Nenhum título disponível.'}
             </div>`;
             return;
         }
+        document.getElementById('tesouro-data').innerText =
+            `Base: ${new Date().toLocaleDateString('pt-BR')}`;
 
-        // Agrupa por tipo de título
-        const grouped = {};
-        state.tesouro.forEach(t => {
-            const key = t.nome.replace(/\s\d{4}$/, '').trim();
-            if (!grouped[key]) grouped[key] = [];
-            grouped[key].push(t);
-        });
+        // Mostra/oculta botão Renda+ conforme existência de títulos
+        const temRenda = state.tesouro.some(t => classificar(t.nome) === 'renda');
+        document.getElementById('f-renda').style.display = temRenda ? '' : 'none';
 
-        let html = `<table class="w-full text-sm">
-            <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase">
-                    <th class="text-left p-4 font-bold">Título</th>
-                    <th class="text-center p-4 font-bold">Vencimento</th>
-                    <th class="text-right p-4 font-bold">Taxa (a.a.)</th>
-                    <th class="text-right p-4 font-bold">vs Selic</th>
-                </tr>
-            </thead><tbody>`;
+        renderCards();
+    }
 
-        state.tesouro
+    function renderCards() {
+        const container = document.getElementById('tesouro-cards');
+        const selic     = state.macro.selic;
+
+        const lista = state.tesouro
+            .filter(t => filtroAtivo === 'todos' || classificar(t.nome) === filtroAtivo)
             .slice()
-            .sort((a, b) => a.taxa - b.taxa)
-            .forEach(t => {
-                const taxa = parseFloat(t.taxa);
-                const diff = taxa - selic;
-                const diffStr = (diff >= 0 ? '+' : '') + diff.toFixed(2) + '%';
-                const diffColor = diff >= 0 ? 'text-emerald-600' : 'text-red-500';
-                const venc = formatDate(t.vencimento);
-                const nomeShort = t.nome.replace('Tesouro ', '');
-
-                html += `<tr class="tesouro-row border-t">
-                    <td class="p-4 font-semibold">${nomeShort}</td>
-                    <td class="p-4 text-center text-slate-500">${venc}</td>
-                    <td class="p-4 text-right font-black text-blue-700">${taxa.toFixed(2)}%</td>
-                    <td class="p-4 text-right font-bold ${diffColor}">${diffStr}</td>
-                </tr>`;
+            .sort((a, b) => {
+                // Ordena: Selic → Prefixado → IPCA → Renda+, depois por taxa
+                const ordem = { selic: 0, pre: 1, ipca: 2, renda: 3 };
+                const da = ordem[classificar(a.nome)] ?? 9;
+                const db = ordem[classificar(b.nome)] ?? 9;
+                return da !== db ? da - db : a.taxa - b.taxa;
             });
 
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-        document.getElementById('tesouro-data').innerText = `Base: ${new Date().toLocaleDateString('pt-BR')}`;
+        if (lista.length === 0) {
+            container.innerHTML = `<div class="py-6 text-center text-slate-400 text-sm">Nenhum título nesta categoria.</div>`;
+            return;
+        }
+
+        container.innerHTML = lista.map(t => {
+            const tipo  = classificar(t.nome);
+            const cfg   = TIPO_CONFIG[tipo] || TIPO_CONFIG.pre;
+            const taxa  = parseFloat(t.taxa);
+            const venc  = formatDate(t.vencimento);
+            const nome  = t.nome.replace('Tesouro ', '');
+            const diff  = taxa - selic;
+            const diffStr  = (diff >= 0 ? '+' : '') + diff.toFixed(2) + '%';
+            const diffColor = diff >= 0 ? '#16a34a' : '#dc2626';
+
+            // Linha descritiva da taxa
+            let taxaDesc = `${taxa.toFixed(2)}% a.a.`;
+            if (tipo === 'ipca')  taxaDesc = `IPCA + ${taxa.toFixed(2)}% a.a.`;
+            if (tipo === 'selic') taxaDesc = `Selic + ${taxa.toFixed(2)}% a.a.`;
+            if (tipo === 'renda') taxaDesc = `IPCA + ${taxa.toFixed(2)}% a.a.`;
+
+            return `
+            <div class="tesouro-card ${cfg.cardClass}">
+                <div style="flex:1">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                        <span class="card-badge ${cfg.badgeClass}">${cfg.label}</span>
+                        <span style="font-size:0.7rem;color:#94a3b8">Venc. ${venc}</span>
+                    </div>
+                    <div style="font-weight:700;font-size:0.95rem;color:#1e293b">${nome}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;margin-left:1rem">
+                    <div class="${cfg.taxaClass}" style="font-size:1.25rem;font-weight:900;line-height:1">${taxaDesc}</div>
+                    <div style="font-size:0.72rem;font-weight:600;color:${diffColor};margin-top:3px">${diffStr} vs Selic</div>
+                </div>
+            </div>`;
+        }).join('');
     }
 
     // ═══════════════════════════════════════════════════════════
