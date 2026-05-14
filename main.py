@@ -99,21 +99,36 @@ def atualizar_tesouro():
     except Exception as e:
         print(f"  ✗ Erro no JSON: {e} — tentando CSV.")
 
-    # ── Fonte 2: CSV novo do Tesouro Transparente ──
+    # ── Fonte 2: CSV de títulos disponíveis hoje ──
     try:
         url_csv = (
+            "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto"
+            "/service/api/treasurybondsinfo.json"
+        )
+        # Tenta a API de preços do dia (formato diferente)
+        url_csv2 = (
             "https://www.tesourotransparente.gov.br/ckan/dataset/"
             "df56aa42-484a-4a59-8184-7676580c81e3/resource/"
             "796d2059-14e9-44e3-80c9-2d9e30b405c1/download/"
             "precotaxatesourodireto.csv"
         )
-        resp = requests.get(url_csv, timeout=15, verify=False,
+        resp = requests.get(url_csv2, timeout=15, verify=False,
                             headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
 
         df = pd.read_csv(io.StringIO(resp.text), sep=';', decimal=',')
-        data_max = df['Data Base'].max()
-        df_hoje  = df[df['Data Base'] == data_max].copy()
+
+        # Converte datas para datetime para comparação correta
+        df['Data Base dt'] = pd.to_datetime(df['Data Base'], format='%d/%m/%Y', errors='coerce')
+        df['Data Venc dt'] = pd.to_datetime(df['Data Vencimento'], format='%d/%m/%Y', errors='coerce')
+
+        # Pega apenas a data mais recente
+        data_max = df['Data Base dt'].max()
+        df_hoje  = df[df['Data Base dt'] == data_max].copy()
+
+        # Filtra apenas títulos com vencimento FUTURO
+        hoje_dt = pd.Timestamp.now()
+        df_hoje = df_hoje[df_hoje['Data Venc dt'] > hoje_dt]
 
         lista = []
         for _, row in df_hoje.iterrows():
@@ -129,10 +144,10 @@ def atualizar_tesouro():
         if lista:
             cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            print(f"  ✓ {len(lista)} títulos carregados via CSV.")
+            print(f"  ✓ {len(lista)} títulos carregados via CSV (vencimento futuro).")
             return
         else:
-            print("  ✗ CSV vazio — usando fallback.")
+            print("  ✗ CSV sem títulos futuros — usando fallback.")
 
     except Exception as e:
         print(f"  ✗ Erro no CSV: {e} — usando fallback.")

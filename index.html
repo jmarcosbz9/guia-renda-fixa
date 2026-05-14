@@ -443,18 +443,20 @@
         const n = nome.toLowerCase();
         if (n.includes('renda+') || n.includes('renda +') || n.includes('educa'))
             return 'renda';
-        if (n.includes('selic')) return 'selic';
-        if (n.includes('prefixado') || n.includes('pre fixado')) return 'pre';
-        if (n.includes('ipca') || n.includes('inflação') || n.includes('ntn-b'))
+        if (n.includes('selic'))
+            return 'selic';
+        if (n.includes('igpm') || n.includes('igp-m') || n.includes('ipca'))
             return 'ipca';
+        if (n.includes('prefixado') || n.includes('pre fixado') || n.includes('ltn') || n.includes('ntn-f'))
+            return 'pre';
         return 'pre';
     }
 
     const TIPO_CONFIG = {
-        selic: { label: 'Selic',      cardClass: 'card-selic',  taxaClass: 'card-taxa-selic',  badgeClass: 'badge-selic' },
-        pre:   { label: 'Prefixado',  cardClass: 'card-pre',    taxaClass: 'card-taxa-pre',    badgeClass: 'badge-pre'   },
-        ipca:  { label: 'Inflação',   cardClass: 'card-ipca',   taxaClass: 'card-taxa-ipca',   badgeClass: 'badge-ipca'  },
-        renda: { label: 'Renda+',     cardClass: 'card-renda',  taxaClass: 'card-taxa-renda',  badgeClass: 'badge-renda' },
+        selic: { label: 'Selic',       cardClass: 'card-selic',  taxaClass: 'card-taxa-selic',  badgeClass: 'badge-selic' },
+        pre:   { label: 'Prefixado',   cardClass: 'card-pre',    taxaClass: 'card-taxa-pre',    badgeClass: 'badge-pre'   },
+        ipca:  { label: 'Inflação',    cardClass: 'card-ipca',   taxaClass: 'card-taxa-ipca',   badgeClass: 'badge-ipca'  },
+        renda: { label: 'Renda+',      cardClass: 'card-renda',  taxaClass: 'card-taxa-renda',  badgeClass: 'badge-renda' },
     };
 
     function filtrarTesouro(filtro) {
@@ -514,9 +516,11 @@
 
             // Linha descritiva da taxa
             let taxaDesc = `${taxa.toFixed(2)}% a.a.`;
-            if (tipo === 'ipca')  taxaDesc = `IPCA + ${taxa.toFixed(2)}% a.a.`;
-            if (tipo === 'selic') taxaDesc = `Selic + ${taxa.toFixed(2)}% a.a.`;
-            if (tipo === 'renda') taxaDesc = `IPCA + ${taxa.toFixed(2)}% a.a.`;
+            const nLower = t.nome.toLowerCase();
+            if (nLower.includes('ipca'))  taxaDesc = `IPCA + ${taxa.toFixed(2)}% a.a.`;
+            if (nLower.includes('igpm') || nLower.includes('igp-m')) taxaDesc = `IGPM + ${taxa.toFixed(2)}% a.a.`;
+            if (nLower.includes('selic')) taxaDesc = `Selic + ${taxa.toFixed(2)}% a.a.`;
+            if (tipo === 'renda')         taxaDesc = `IPCA + ${taxa.toFixed(2)}% a.a.`;
 
             return `
             <div class="tesouro-card ${cfg.cardClass}">
