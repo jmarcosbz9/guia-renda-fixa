@@ -56,14 +56,59 @@ def get_bacen_data(serie):
 # ─────────────────────────────────────────
 def atualizar_tesouro():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Atualizando dados do Tesouro...")
+
+    # ── Fonte 1: API JSON oficial do Tesouro Direto (mais confiável) ──
+    try:
+        url_json = (
+            "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto"
+            "/service/api/treasurybondsinfo.json"
+        )
+        resp = requests.get(url_json, timeout=10,
+                            headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        data = resp.json()
+
+        lista = []
+        bonds = (data.get("response", {})
+                     .get("TrsrBdTradgList", []))
+        for item in bonds:
+            bond = item.get("TrsrBd", {})
+            nome = bond.get("nm", "")
+            taxa = bond.get("anulInvstmtRate", 0)
+            venc = bond.get("mtrtyDt", "")[:10]
+            if not nome or not taxa:
+                continue
+            # Formata vencimento de YYYY-MM-DD para DD/MM/YYYY
+            if "-" in venc:
+                y, m, d = venc.split("-")
+                venc = f"{d}/{m}/{y}"
+            lista.append({
+                "nome":       f"Tesouro {nome}",
+                "taxa":       float(taxa),
+                "vencimento": venc,
+            })
+
+        if lista:
+            cache["tesouro"]       = lista
+            cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+            print(f"  ✓ {len(lista)} títulos carregados via JSON.")
+            return
+        else:
+            print("  ✗ JSON vazio — tentando CSV.")
+
+    except Exception as e:
+        print(f"  ✗ Erro no JSON: {e} — tentando CSV.")
+
+    # ── Fonte 2: CSV novo do Tesouro Transparente ──
     try:
         url_csv = (
             "https://www.tesourotransparente.gov.br/ckan/dataset/"
-            "df56aa42-4150-4748-a26e-7e3748025e6f/resource/"
-            "796d2059-14e9-40e3-8041-f8e2f24bc927/download/"
-            "PrecosTaxasTesouroDireto.csv"
+            "df56aa42-484a-4a59-8184-7676580c81e3/resource/"
+            "796d2059-14e9-44e3-80c9-2d9e30b405c1/download/"
+            "precotaxatesourodireto.csv"
         )
-        resp = requests.get(url_csv, timeout=15, verify=False)
+        resp = requests.get(url_csv, timeout=15, verify=False,
+                            headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
 
         df = pd.read_csv(io.StringIO(resp.text), sep=';', decimal=',')
@@ -82,17 +127,21 @@ def atualizar_tesouro():
             })
 
         if lista:
-            cache["tesouro"]      = lista
+            cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            print(f"  ✓ {len(lista)} títulos carregados. Base: {data_max}")
+            print(f"  ✓ {len(lista)} títulos carregados via CSV.")
+            return
         else:
-            print("  ✗ CSV vazio — mantendo cache anterior.")
+            print("  ✗ CSV vazio — usando fallback.")
 
     except Exception as e:
-        print(f"  ✗ Erro ao buscar Tesouro: {e} — mantendo cache anterior.")
-        if not cache["tesouro"]:
-            cache["tesouro"] = TESOURO_FALLBACK
-            cache["atualizado_em"] = "fallback"
+        print(f"  ✗ Erro no CSV: {e} — usando fallback.")
+
+    # ── Fallback ──
+    if not cache["tesouro"]:
+        cache["tesouro"]       = TESOURO_FALLBACK
+        cache["atualizado_em"] = "fallback"
+        print("  ✗ Usando dados de referência (fallback).")
 
 # ─────────────────────────────────────────
 #  CRON — roda todo dia útil às 10:30 BRT
