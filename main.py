@@ -158,48 +158,17 @@ def parse_b3_bond(bond: dict) -> dict | None:
 
 # ─────────────────────────────────────────
 #  Atualiza cache — tentativa em cascata
+#  Regra: só sobrescreve o cache se a nova
+#  lista tiver títulos. Cache anterior é
+#  preservado se todas as fontes falharem
+#  ou retornarem vazio (mercado fechado).
 # ─────────────────────────────────────────
 def atualizar_tesouro():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Atualizando dados do Tesouro...")
 
-    # ── Fonte 1: API JSON da B3 (backend real do portal Tesouro Direto) ──
-    # Retorna APENAS títulos ativos para compra neste momento.
-    # Usa session com cookies para passar pelo Cloudflare.
-    try:
-        session = requests.Session()
-        # Primeiro acesso à homepage para obter cookies do Cloudflare
-        session.get("https://www.tesourodireto.com.br/",
-                    headers=BROWSER_HEADERS, timeout=10)
-        # Agora busca o JSON com os cookies já setados
-        resp = session.get(
-            "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto"
-            "/model/entity/PublicTitle.json",
-            headers=BROWSER_HEADERS,
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data  = resp.json()
-        bonds = (data.get("response", {})
-                     .get("TrsrBdTradgList", []))
-        lista = []
-        for item in bonds:
-            bond = item.get("TrsrBd", {})
-            parsed = parse_b3_bond(bond)
-            if parsed:
-                lista.append(parsed)
-
-        if lista:
-            cache["tesouro"]       = lista
-            cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            print(f"  ✓ {len(lista)} títulos via API B3 (Fonte 1).")
-            return
-        print("  ✗ API B3 retornou lista vazia — tentando mirror.")
-
-    except Exception as e:
-        print(f"  ✗ Erro na API B3: {e} — tentando mirror.")
-
-    # ── Fonte 2: Mirror radaropcoes ──
-    # Espelha a mesma API da B3; retorna apenas títulos ativos.
+    # ── Fonte 1: radaropcoes — mirror público da API B3 ──
+    # Mais confiável: não exige session/cookies, CORS aberto,
+    # estrutura idêntica à API interna da B3.
     try:
         resp = requests.get(
             "https://api.radaropcoes.com/bonds.json",
@@ -207,7 +176,8 @@ def atualizar_tesouro():
             headers=BROWSER_HEADERS,
         )
         resp.raise_for_status()
-        bonds = resp.json().get("response", {}).get("TrsrBdTradgList", [])
+        data  = resp.json()
+        bonds = data.get("response", {}).get("TrsrBdTradgList", [])
         lista = []
         for item in bonds:
             bond   = item.get("TrsrBd", {})
@@ -218,15 +188,46 @@ def atualizar_tesouro():
         if lista:
             cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            print(f"  ✓ {len(lista)} títulos via mirror radaropcoes (Fonte 2).")
+            print(f"  ✓ {len(lista)} títulos via radaropcoes (Fonte 1).")
             return
-        print("  ✗ Mirror vazio.")
+        # Lista vazia = mercado fechado ou sem negociação agora
+        # NÃO limpar o cache — mantém o último dado válido
+        print("  ⚠ radaropcoes retornou lista vazia (mercado fechado?). Cache preservado.")
 
     except Exception as e:
-        print(f"  ✗ Erro no mirror: {e}")
+        print(f"  ✗ Erro radaropcoes: {e}")
 
-    # ── Fonte 3: CSV do Tesouro Direto (rendimento-investir) ──
-    # Terceira opção: mesmo CSV de antes, mas agora com session+cookies.
+    # ── Fonte 2: API B3 via session (treasurybondsinfo) ──
+    for url_b3 in [
+        "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto/service/api/treasurybondsinfo.json",
+        "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto/model/entity/PublicTitle.json",
+    ]:
+        try:
+            session = requests.Session()
+            session.get("https://www.tesourodireto.com.br/",
+                        headers=BROWSER_HEADERS, timeout=10)
+            resp = session.get(url_b3, headers=BROWSER_HEADERS, timeout=10)
+            resp.raise_for_status()
+            if "<!DOCTYPE" in resp.text[:50]:
+                raise ValueError("Cloudflare challenge HTML recebido")
+            data  = resp.json()
+            bonds = data.get("response", {}).get("TrsrBdTradgList", [])
+            lista = []
+            for item in bonds:
+                bond   = item.get("TrsrBd", {})
+                parsed = parse_b3_bond(bond)
+                if parsed:
+                    lista.append(parsed)
+            if lista:
+                cache["tesouro"]       = lista
+                cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                print(f"  ✓ {len(lista)} títulos via API B3 session: {url_b3.split('/')[-1]}")
+                return
+            print(f"  ⚠ API B3 vazia: {url_b3.split('/')[-1]}")
+        except Exception as e:
+            print(f"  ✗ Erro API B3 ({url_b3.split('/')[-1]}): {e}")
+
+    # ── Fonte 3: CSV rendimento-investir via session ──
     try:
         session = requests.Session()
         session.get("https://www.tesourodireto.com.br/",
@@ -234,25 +235,22 @@ def atualizar_tesouro():
         resp = session.get(
             "https://www.tesourodireto.com.br/documents/d/guest/"
             "rendimento-investir-csv?download=true",
-            headers=BROWSER_HEADERS,
-            timeout=10,
+            headers=BROWSER_HEADERS, timeout=10,
         )
         resp.raise_for_status()
         if "<!DOCTYPE" in resp.text[:50]:
-            raise ValueError("Retornou HTML (Cloudflare challenge), não CSV")
+            raise ValueError("Cloudflare challenge HTML recebido")
 
         linhas = resp.text.strip().split("\n")
         header = [h.strip().strip('"').lower() for h in linhas[0].split(";")]
         print(f"  Header CSV: {header}")
-
         try:
-            idx_nome = next(i for i, h in enumerate(header) if "nome" in h or "título" in h or "titulo" in h)
+            idx_nome = next(i for i, h in enumerate(header) if "nome" in h or "titulo" in h)
             idx_rent = next(i for i, h in enumerate(header) if "rentab" in h)
             idx_vmin = next(i for i, h in enumerate(header) if "valor" in h)
             idx_venc = next(i for i, h in enumerate(header) if "venc" in h)
         except StopIteration:
             idx_nome, idx_rent, idx_vmin, idx_venc = 0, 1, 2, 3
-
         lista = []
         for linha in linhas[1:]:
             partes = linha.strip().split(";")
@@ -268,23 +266,19 @@ def atualizar_tesouro():
             taxa, label = parse_rentabilidade(get(idx_rent))
             if taxa is None:
                 continue
-            vmin = parse_valor_minimo(get(idx_vmin))
             lista.append({
-                "nome":                nome,
-                "taxa":                taxa,
+                "nome": nome, "taxa": taxa,
                 "rentabilidade_label": label or get(idx_rent),
-                "valor_minimo":        vmin,
-                "vencimento":          get(idx_venc).strip(),
+                "valor_minimo": parse_valor_minimo(get(idx_vmin)),
+                "vencimento": get(idx_venc).strip(),
             })
-
         if lista:
             cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
             print(f"  ✓ {len(lista)} títulos via CSV (Fonte 3).")
             return
-
     except Exception as e:
-        print(f"  ✗ Erro no CSV: {e}")
+        print(f"  ✗ Erro CSV: {e}")
 
     # ── Todas as fontes falharam ──
     # Cache permanece vazio → frontend exibe aviso de indisponibilidade.
