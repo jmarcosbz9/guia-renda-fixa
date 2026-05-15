@@ -407,35 +407,78 @@
 
     // ═══════════════════════════════════════════════════════════
     //  CARREGAMENTO DE DADOS
+    //  Estratégia em duas etapas:
+    //  1. Backend (Railway) → macro Selic/IPCA + cache de títulos
+    //  2. Se títulos vazios → frontend busca radaropcoes diretamente
+    //     (browser não é bloqueado pelo Cloudflare, servidor sim)
     // ═══════════════════════════════════════════════════════════
     async function loadData() {
         setApiStatus('loading', 'Carregando dados do mercado...');
         hideError();
 
+        // ── Etapa 1: Backend Railway (macro + cache títulos) ──
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 8000);
-
             const res = await fetch(API_URL, { signal: controller.signal });
             clearTimeout(timeout);
-
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
             const data = await res.json();
-
             state.macro   = data.macro;
             state.tesouro = data.tesouro || [];
             state.loaded  = true;
             state.error   = false;
-
-            setApiStatus('ok', `Dados atualizados às ${new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}`);
         } catch (err) {
-            console.warn('API indisponível, usando valores de referência.', err);
+            console.warn('Backend indisponível:', err);
             state.error = true;
             setApiStatus('err', 'Falha na API — exibindo valores de referência');
             showError();
+            renderAll();
+            return;
         }
 
+        // ── Etapa 2: Se títulos vazios, busca radaropcoes diretamente ──
+        // O browser consegue acessar; servidor Railway é bloqueado pelo Cloudflare.
+        if (state.tesouro.length === 0) {
+            try {
+                setApiStatus('loading', 'Buscando títulos diretamente...');
+                const res = await fetch('https://api.radaropcoes.com/bonds.json');
+                if (res.ok) {
+                    const data  = await res.json();
+                    const bonds = data?.response?.TrsrBdTradgList || [];
+                    state.tesouro = bonds
+                        .map(item => {
+                            const b    = item.TrsrBd || {};
+                            const nome = b.nm
+                                ? (b.nm.toLowerCase().startsWith('tesouro') ? b.nm : `Tesouro ${b.nm}`)
+                                : null;
+                            if (!nome) return null;
+                            const taxa = parseFloat(b.anulInvstmtRate || b.anulRedRate || 0);
+                            if (!taxa) return null;
+                            const vmin = parseFloat(b.minInvstmtAmt || b.untrInvstmtVal || 0) || null;
+                            let venc = (b.mtrtyDt || '').slice(0, 10);
+                            if (venc.includes('-')) {
+                                const [y, m, d] = venc.split('-');
+                                venc = `${d}/${m}/${y}`;
+                            }
+                            const n = nome.toLowerCase();
+                            let label;
+                            if (n.includes('ipca'))       label = `IPCA + ${taxa.toFixed(2).replace('.',',')}% a.a.`;
+                            else if (n.includes('selic')) label = `Selic + ${taxa}% a.a.`;
+                            else                          label = `${taxa.toFixed(2).replace('.',',')}% a.a.`;
+                            return { nome, taxa, rentabilidade_label: label, valor_minimo: vmin, vencimento: venc };
+                        })
+                        .filter(Boolean);
+                    if (state.tesouro.length > 0) {
+                        console.log(`radaropcoes direto: ${state.tesouro.length} títulos`);
+                    }
+                }
+            } catch (e) {
+                console.warn('radaropcoes direto falhou:', e);
+            }
+        }
+
+        setApiStatus('ok', `Dados atualizados às ${new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}`);
         renderAll();
     }
 
@@ -605,9 +648,14 @@
     function renderTesouro() {
         const container = document.getElementById('tesouro-cards');
         if (!state.tesouro || state.tesouro.length === 0) {
-            container.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm">
-                ${state.error ? '⚠️ Dados do Tesouro indisponíveis no momento.' : 'Nenhum título disponível.'}
-            </div>`;
+            const hora = new Date().getHours();
+            const foraDoPregao = hora < 9 || hora >= 18;
+            const msg = state.error
+                ? '⚠️ Falha ao conectar com a API. Tente novamente.'
+                : foraDoPregao
+                    ? '🕐 Tesouro Direto funciona de 09h30 às 18h em dias úteis. Dados serão exibidos na abertura do próximo pregão.'
+                    : '⏳ Aguardando dados do Tesouro Direto. O mercado pode estar em atualização — tente novamente em instantes.';
+            container.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm px-4">${msg}</div>`;
             return;
         }
         document.getElementById('tesouro-data').innerText = `Base: ${new Date().toLocaleDateString('pt-BR')}`;
