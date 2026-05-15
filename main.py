@@ -256,6 +256,35 @@ async def get_market_data():
 
 
 # ─────────────────────────────────────────
+#  Endpoint de diagnóstico — só para debug
+#  Acesse: /api/debug para ver o CSV bruto
+#  e o resultado do parsing em tempo real.
+#  Remova em produção após confirmar parsing.
+# ─────────────────────────────────────────
+@app.get("/api/debug")
+async def debug():
+    url = (
+        "https://www.tesourodireto.com.br/documents/d/guest/"
+        "rendimento-investir-csv?download=true"
+    )
+    try:
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        raw  = resp.text
+        linhas = raw.strip().split('\n')
+        return {
+            "status_code": resp.status_code,
+            "encoding":    resp.encoding,
+            "num_linhas":  len(linhas),
+            "header_raw":  linhas[0] if linhas else None,
+            "linhas_raw":  linhas[:6],          # primeiras 6 linhas cruas
+            "cache_atual": cache["tesouro"],
+            "cache_em":    cache["atualizado_em"],
+        }
+    except Exception as e:
+        return {"erro": str(e), "cache_atual": cache["tesouro"]}
+
+
+# ─────────────────────────────────────────
 #  Entrypoint
 # ─────────────────────────────────────────
 if __name__ == "__main__":
