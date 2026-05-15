@@ -90,129 +90,201 @@ def parse_valor_minimo(val_str):
 
 
 # ─────────────────────────────────────────
+#  Headers que simulam browser real
+#  Necessário: tesourodireto.com.br usa
+#  Cloudflare Bot Management que bloqueia
+#  requests sem headers de browser.
+# ─────────────────────────────────────────
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept":          "application/json, text/plain, */*",
+    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer":         "https://www.tesourodireto.com.br/",
+    "Origin":          "https://www.tesourodireto.com.br",
+    "Connection":      "keep-alive",
+    "sec-ch-ua":       '"Chromium";v="124", "Google Chrome";v="124"',
+    "sec-ch-ua-platform": '"Windows"',
+    "Sec-Fetch-Dest":  "empty",
+    "Sec-Fetch-Mode":  "cors",
+    "Sec-Fetch-Site":  "same-origin",
+}
+
+
+def parse_b3_bond(bond: dict) -> dict | None:
+    """Converte um item da API JSON da B3 para o formato interno."""
+    nome = bond.get("nm", "")
+    if not nome:
+        return None
+    if not nome.lower().startswith("tesouro"):
+        nome = f"Tesouro {nome}"
+
+    taxa = bond.get("anulInvstmtRate") or bond.get("anulRedRate") or 0
+    venc = (bond.get("mtrtyDt") or "")[:10]
+    vmin = bond.get("minInvstmtAmt") or bond.get("untrInvstmtVal")
+
+    if not taxa:
+        return None
+    if "-" in venc:
+        y, m, d = venc.split("-")
+        venc = f"{d}/{m}/{y}"
+
+    taxa_f = float(taxa)
+    n = nome.lower()
+    if "ipca" in n:
+        label = f"IPCA + {taxa_f:.2f}% a.a.".replace(".", ",")
+    elif "selic" in n:
+        label = f"Selic + {taxa_f:.4g}% a.a.".replace(".", ",")
+    else:
+        label = f"{taxa_f:.2f}% a.a.".replace(".", ",")
+
+    try:
+        vmin_f = round(float(vmin), 2) if vmin else None
+    except Exception:
+        vmin_f = None
+
+    return {
+        "nome":                nome,
+        "taxa":                taxa_f,
+        "rentabilidade_label": label,
+        "valor_minimo":        vmin_f,
+        "vencimento":          venc,
+    }
+
+
+# ─────────────────────────────────────────
 #  Atualiza cache — tentativa em cascata
 # ─────────────────────────────────────────
 def atualizar_tesouro():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Atualizando dados do Tesouro...")
 
-    # ── Fonte 1: CSV oficial "disponível para investir hoje" ──
-    # Este CSV lista EXCLUSIVAMENTE os títulos em negociação.
-    # Colunas: Nome ; Rentabilidade ; Valor Mínimo ; Vencimento
-    # (pode haver colunas extras entre Rentabilidade e Valor Mínimo)
+    # ── Fonte 1: API JSON da B3 (backend real do portal Tesouro Direto) ──
+    # Retorna APENAS títulos ativos para compra neste momento.
+    # Usa session com cookies para passar pelo Cloudflare.
     try:
-        url_investir = (
-            "https://www.tesourodireto.com.br/documents/d/guest/"
-            "rendimento-investir-csv?download=true"
+        session = requests.Session()
+        # Primeiro acesso à homepage para obter cookies do Cloudflare
+        session.get("https://www.tesourodireto.com.br/",
+                    headers=BROWSER_HEADERS, timeout=10)
+        # Agora busca o JSON com os cookies já setados
+        resp = session.get(
+            "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto"
+            "/model/entity/PublicTitle.json",
+            headers=BROWSER_HEADERS,
+            timeout=10,
         )
-        resp = requests.get(url_investir, timeout=10,
-                            headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
-
-        linhas = resp.text.strip().split('\n')
-        # Detecta cabeçalho para mapear índices das colunas
-        header = [h.strip().strip('"').lower() for h in linhas[0].split(';')]
-        print(f"  Header CSV investir: {header}")
-
-        # Tenta localizar colunas por nome; fallback para índices fixos
-        try:
-            idx_nome  = next(i for i, h in enumerate(header) if 'nome' in h or 'título' in h or 'titulo' in h)
-            idx_rent  = next(i for i, h in enumerate(header) if 'rentab' in h)
-            idx_vmin  = next(i for i, h in enumerate(header) if 'valor' in h and 'mín' in h.replace('i','í') or 'minimo' in h or 'mínimo' in h)
-            idx_venc  = next(i for i, h in enumerate(header) if 'venc' in h)
-        except StopIteration:
-            # Fallback: assume ordem Nome;Rent;ValMin;Venc
-            idx_nome, idx_rent, idx_vmin, idx_venc = 0, 1, 2, 3
-
+        data  = resp.json()
+        bonds = (data.get("response", {})
+                     .get("TrsrBdTradgList", []))
         lista = []
-        for linha in linhas[1:]:
-            partes = linha.strip().split(';')
-            if len(partes) < 3:
-                continue
-            def get(i):
-                return partes[i].strip().strip('"') if i < len(partes) else ''
-
-            nome = get(idx_nome)
-            if not nome:
-                continue
-            if not nome.lower().startswith('tesouro'):
-                nome = f"Tesouro {nome}"
-
-            taxa, label = parse_rentabilidade(get(idx_rent))
-            if taxa is None:
-                continue
-
-            vmin = parse_valor_minimo(get(idx_vmin))
-            venc = get(idx_venc).strip()
-
-            lista.append({
-                "nome":                 nome,
-                "taxa":                 taxa,
-                "rentabilidade_label":  label or get(idx_rent),
-                "valor_minimo":         vmin,
-                "vencimento":           venc,
-            })
+        for item in bonds:
+            bond = item.get("TrsrBd", {})
+            parsed = parse_b3_bond(bond)
+            if parsed:
+                lista.append(parsed)
 
         if lista:
             cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            print(f"  ✓ {len(lista)} títulos disponíveis para investir (Fonte 1).")
+            print(f"  ✓ {len(lista)} títulos via API B3 (Fonte 1).")
             return
-        print("  ✗ CSV investir vazio — tentando mirror.")
+        print("  ✗ API B3 retornou lista vazia — tentando mirror.")
 
     except Exception as e:
-        print(f"  ✗ Erro no CSV investir: {e} — tentando mirror.")
+        print(f"  ✗ Erro na API B3: {e} — tentando mirror.")
 
     # ── Fonte 2: Mirror radaropcoes ──
-    # Espelha a API oficial B3/TD; retorna apenas títulos ativos.
+    # Espelha a mesma API da B3; retorna apenas títulos ativos.
     try:
-        resp = requests.get("https://api.radaropcoes.com/bonds.json",
-                            timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        resp = requests.get(
+            "https://api.radaropcoes.com/bonds.json",
+            timeout=10,
+            headers=BROWSER_HEADERS,
+        )
         resp.raise_for_status()
         bonds = resp.json().get("response", {}).get("TrsrBdTradgList", [])
         lista = []
         for item in bonds:
-            bond = item.get("TrsrBd", {})
-            nome = bond.get("nm", "")
-            taxa = bond.get("anulInvstmtRate", 0)
-            venc = bond.get("mtrtyDt", "")[:10]
-            vmin = bond.get("minInvstmtAmt") or bond.get("untrInvstmtVal")
-            if not nome or not taxa:
-                continue
-            if "-" in venc:
-                y, m, d = venc.split("-")
-                venc = f"{d}/{m}/{y}"
-            try:
-                vmin = round(float(vmin), 2) if vmin else None
-            except Exception:
-                vmin = None
-
-            taxa_f = float(taxa)
-            nome_f = f"Tesouro {nome}" if not nome.lower().startswith('tesouro') else nome
-            n_lower = nome_f.lower()
-            if 'ipca' in n_lower:
-                label = f"IPCA + {taxa_f:.2f}% a.a.".replace('.', ',')
-            elif 'selic' in n_lower:
-                label = f"Selic + {taxa_f:.4g}% a.a.".replace('.', ',')
-            else:
-                label = f"{taxa_f:.2f}% a.a.".replace('.', ',')
-
-            lista.append({
-                "nome":                nome_f,
-                "taxa":                taxa_f,
-                "rentabilidade_label": label,
-                "valor_minimo":        vmin,
-                "vencimento":          venc,
-            })
+            bond   = item.get("TrsrBd", {})
+            parsed = parse_b3_bond(bond)
+            if parsed:
+                lista.append(parsed)
 
         if lista:
             cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            print(f"  ✓ {len(lista)} títulos via mirror (Fonte 2).")
+            print(f"  ✓ {len(lista)} títulos via mirror radaropcoes (Fonte 2).")
             return
         print("  ✗ Mirror vazio.")
 
     except Exception as e:
         print(f"  ✗ Erro no mirror: {e}")
+
+    # ── Fonte 3: CSV do Tesouro Direto (rendimento-investir) ──
+    # Terceira opção: mesmo CSV de antes, mas agora com session+cookies.
+    try:
+        session = requests.Session()
+        session.get("https://www.tesourodireto.com.br/",
+                    headers=BROWSER_HEADERS, timeout=10)
+        resp = session.get(
+            "https://www.tesourodireto.com.br/documents/d/guest/"
+            "rendimento-investir-csv?download=true",
+            headers=BROWSER_HEADERS,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        if "<!DOCTYPE" in resp.text[:50]:
+            raise ValueError("Retornou HTML (Cloudflare challenge), não CSV")
+
+        linhas = resp.text.strip().split("\n")
+        header = [h.strip().strip('"').lower() for h in linhas[0].split(";")]
+        print(f"  Header CSV: {header}")
+
+        try:
+            idx_nome = next(i for i, h in enumerate(header) if "nome" in h or "título" in h or "titulo" in h)
+            idx_rent = next(i for i, h in enumerate(header) if "rentab" in h)
+            idx_vmin = next(i for i, h in enumerate(header) if "valor" in h)
+            idx_venc = next(i for i, h in enumerate(header) if "venc" in h)
+        except StopIteration:
+            idx_nome, idx_rent, idx_vmin, idx_venc = 0, 1, 2, 3
+
+        lista = []
+        for linha in linhas[1:]:
+            partes = linha.strip().split(";")
+            if len(partes) < 3:
+                continue
+            def get(i):
+                return partes[i].strip().strip('"') if i < len(partes) else ""
+            nome = get(idx_nome)
+            if not nome:
+                continue
+            if not nome.lower().startswith("tesouro"):
+                nome = f"Tesouro {nome}"
+            taxa, label = parse_rentabilidade(get(idx_rent))
+            if taxa is None:
+                continue
+            vmin = parse_valor_minimo(get(idx_vmin))
+            lista.append({
+                "nome":                nome,
+                "taxa":                taxa,
+                "rentabilidade_label": label or get(idx_rent),
+                "valor_minimo":        vmin,
+                "vencimento":          get(idx_venc).strip(),
+            })
+
+        if lista:
+            cache["tesouro"]       = lista
+            cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+            print(f"  ✓ {len(lista)} títulos via CSV (Fonte 3).")
+            return
+
+    except Exception as e:
+        print(f"  ✗ Erro no CSV: {e}")
 
     # ── Todas as fontes falharam ──
     # Cache permanece vazio → frontend exibe aviso de indisponibilidade.
