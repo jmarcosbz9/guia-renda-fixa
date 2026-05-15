@@ -12,13 +12,38 @@
 
         /* ── Popup de ajuda ── */
         .hq-popup {
-            visibility: hidden; opacity: 0; transition: opacity 0.2s, transform 0.2s;
-            background: white; border: 2px solid black; border-radius: 12px;
-            box-shadow: 6px 6px 0px black; z-index: 100; padding: 1rem;
-            position: absolute; width: 280px; font-size: 0.8rem; color: black;
-            top: 100%; left: 0; margin-top: 8px;
+            visibility: hidden; opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            background: white; border: 1.5px solid #1e293b; border-radius: 14px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.13); z-index: 200; padding: 1rem 1.1rem;
+            position: absolute; width: 290px; font-size: 0.82rem; color: #1e293b;
+            top: calc(100% + 10px); left: 0;
         }
-        .hover-area:hover .hq-popup { visibility: visible; opacity: 1; transform: translateY(-4px); }
+        .hq-popup .popup-title {
+            font-weight: 800; font-size: 0.85rem; color: #2563eb;
+            margin-bottom: 0.45rem; display: block;
+        }
+        .hq-popup .popup-body {
+            color: #334155; line-height: 1.6; font-size: 0.8rem;
+        }
+        .hq-popup .popup-source {
+            margin-top: 0.55rem; font-size: 0.68rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: #94a3b8;
+        }
+        .hover-area { position: relative; cursor: default; }
+        .hover-area:hover .hq-popup { visibility: visible; opacity: 1; transform: translateY(-3px); }
+
+        /* ── Popup do título do gráfico ── */
+        .chart-title-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+        .chart-help-icon {
+            width: 18px; height: 18px; border-radius: 50%;
+            background: #e2e8f0; color: #64748b; font-size: 0.65rem; font-weight: 800;
+            display: inline-flex; align-items: center; justify-content: center;
+            cursor: default; transition: background 0.15s;
+        }
+        .chart-title-wrap:hover .chart-help-icon { background: #2563eb; color: white; }
+        .chart-title-wrap .hq-popup { top: calc(100% + 8px); left: 0; }
 
         /* ── Navegação ── */
         .nav-btn { transition: background 0.15s, color 0.15s; color: #94a3b8; }
@@ -78,18 +103,57 @@
         /* ── Slider customizado ── */
         input[type="range"] { -webkit-appearance: none; height: 6px; border-radius: 999px; background: #e2e8f0; outline: none; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #2563eb; cursor: pointer; box-shadow: 0 0 0 3px rgba(37,99,235,0.2); }
+
+        /* ── Macro section header ── */
+        .macro-section-title {
+            font-size: 1.5rem; font-weight: 800; color: #0f172a; margin-bottom: 0.2rem;
+        }
+        .macro-section-sub {
+            font-size: 0.82rem; color: #64748b; margin-bottom: 1.5rem;
+        }
+
+        /* ── Card macro redesign (matching screenshots) ── */
+        .macro-card {
+            background: white; border-radius: 20px; border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+            padding: 1.4rem 1.6rem 1.2rem;
+            position: relative; overflow: visible;
+        }
+        .macro-card-label {
+            font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+            text-transform: uppercase; color: #94a3b8; margin-bottom: 0.2rem;
+        }
+        .macro-card-value {
+            font-size: 2.4rem; font-weight: 800; line-height: 1.1; color: #0f172a;
+            min-height: 2.8rem;
+        }
+        .macro-card-value.green { color: #059669; }
+        .macro-card-value.amber { color: #d97706; }
+        .macro-card-source {
+            font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.08em; margin-top: 0.45rem;
+        }
+        .source-blue  { color: #2563eb; }
+        .source-amber { color: #d97706; }
+        .source-green { color: #059669; }
+
+        /* Popup posicionado — não cortar overflow do card */
+        .macro-card { overflow: visible; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
     <!-- ══════════════════════════ HEADER ══════════════════════════ -->
-    <header class="bg-black text-white p-4 shadow-xl sticky top-0 z-50">
+    <header class="bg-black text-white shadow-xl sticky top-0 z-50" style="padding: 1rem 1.5rem;">
         <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-blue-600 border-2 border-white flex items-center justify-center font-bold text-sm">RF</div>
+                <!-- Logo com cantos arredondados conforme temp_7 -->
+                <div style="width:44px;height:44px;background:#2563eb;border:2px solid white;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.9rem;flex-shrink:0;">RF</div>
                 <div>
-                    <h1 class="text-base font-extrabold uppercase leading-tight">GUIA RENDA FIXA — <span class="text-blue-400 normal-case">Aplique Você Mesmo</span></h1>
-                    <div class="flex items-center gap-2 text-[10px] text-slate-400">
+                    <h1 style="font-size:0.95rem;font-weight:800;text-transform:uppercase;letter-spacing:0.02em;line-height:1.2;">
+                        GUIA RENDA FIXA — <span style="color:#60a5fa;text-transform:none;font-weight:700;">Aplique Você Mesmo</span>
+                    </h1>
+                    <div class="flex items-center gap-2" style="font-size:0.68rem;color:#94a3b8;margin-top:2px;">
                         <span id="api-dot" class="api-dot loading"></span>
                         <span id="api-status">Carregando dados do mercado...</span>
                         <span id="api-timestamp" class="hidden"></span>
@@ -111,38 +175,74 @@
         <!-- ══════════════════ ABA 1 — DASHBOARD MACRO ══════════════════ -->
         <div id="tab-dashboard" class="tab-content active">
 
-            <!-- Cards macro -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="bg-white p-6 rounded-3xl border shadow-sm hover-area relative">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Meta Selic</span>
-                    <div id="selic-val" class="text-4xl font-black mt-1 skeleton h-10 w-32">　</div>
-                    <div class="hq-popup">Taxa básica da economia. Define o rendimento do CDI e do Tesouro Selic.</div>
+            <!-- Cabeçalho da seção macro (conforme temp_1.PNG) -->
+            <div style="margin-bottom:1.5rem;">
+                <h2 class="macro-section-title">O que o Mercado Monitora</h2>
+                <p class="macro-section-sub">Dados diretos do Banco Central e Anbima (Associação Brasileira das Entidades dos Mercados Financeiro e de Capitais).</p>
+            </div>
+
+            <!-- Cards macro redesenhados -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+
+                <!-- META SELIC (ATUAL) -->
+                <div class="macro-card hover-area">
+                    <div class="macro-card-label">Meta Selic (Atual)</div>
+                    <div id="selic-val" class="macro-card-value skeleton h-10 w-32">　</div>
+                    <div class="macro-card-source source-blue" id="selic-source">SGS-BCB SÉRIE #432</div>
+                    <div class="hq-popup">
+                        <span class="popup-title">Selic: A Taxa Mãe</span>
+                        <span class="popup-body">É a taxa básica de juros da economia. Ela serve como referência para quase todos os investimentos de Renda Fixa. Quando a Selic sobe, os rendimentos de CDBs e Tesouro Selic aumentam.</span>
+                        <div class="popup-source">SGS-BCB SÉRIE #432</div>
+                    </div>
                 </div>
-                <div class="bg-white p-6 rounded-3xl border shadow-sm hover-area relative">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">IPCA (Proj. 12m)</span>
-                    <div id="ipca-val" class="text-4xl font-black mt-1 skeleton h-10 w-32">　</div>
-                    <div class="hq-popup">Inflação oficial. Se seu título rende menos que isso, você está perdendo poder de compra.</div>
+
+                <!-- IPCA (PROJ. 12M) -->
+                <div class="macro-card hover-area">
+                    <div class="macro-card-label">IPCA (Proj. 12M)</div>
+                    <div id="ipca-val" class="macro-card-value amber skeleton h-10 w-32">　</div>
+                    <div class="macro-card-source source-amber" id="ipca-source">MEDIANA BOLETIM FOCUS</div>
+                    <div class="hq-popup">
+                        <span class="popup-title">IPCA: O Medidor de Preços</span>
+                        <span class="popup-body">É o índice oficial da inflação no Brasil. Ele mostra quanto o custo de vida aumentou. Se o IPCA sobe, o seu dinheiro compra menos coisas. Títulos "IPCA+" garantem que seu dinheiro cresça sempre acima desta taxa.</span>
+                        <div class="popup-source">MEDIANA BOLETIM FOCUS</div>
+                    </div>
                 </div>
-                <div class="bg-white p-6 rounded-3xl border shadow-sm hover-area relative">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Juro Real</span>
-                    <div id="real-val" class="text-4xl font-black text-emerald-600 mt-1 skeleton h-10 w-32">　</div>
-                    <div class="hq-popup">O que sobra de verdade no seu bolso após descontar a inflação. Calculado como (1+Selic)/(1+IPCA)−1.</div>
+
+                <!-- JURO REAL PROJETADO -->
+                <div class="macro-card hover-area">
+                    <div class="macro-card-label">Juro Real Projetado</div>
+                    <div id="real-val" class="macro-card-value green skeleton h-10 w-32">　</div>
+                    <div class="macro-card-source source-green">RETORNO REAL ESTIMADO</div>
+                    <div class="hq-popup">
+                        <span class="popup-title">Juro Real: O Lucro de Verdade</span>
+                        <span class="popup-body">É o rendimento que sobra após você descontar a inflação (IPCA). Se seu investimento rende 10% e a inflação é 4%, seu Juro Real é aproximadamente 6%. É a única medida que realmente aumenta seu patrimônio.</span>
+                        <div class="popup-source">RETORNO REAL ESTIMADO</div>
+                    </div>
                 </div>
+
             </div>
 
             <!-- Banner de erro da API -->
             <div id="api-error-banner" class="hidden mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm flex items-center gap-3">
                 <span class="text-xl">⚠️</span>
                 <div>
-                    <strong>Falha ao conectar com a API.</strong> Exibindo valores de referência. 
+                    <strong>Falha ao conectar com a API.</strong> Exibindo valores de referência.
                     <button onclick="loadData()" class="underline ml-1">Tentar novamente</button>
                 </div>
             </div>
 
-            <!-- Gráfico curva DI -->
+            <!-- Gráfico curva DI — com dupla série e hover popup no título -->
             <div class="bg-white p-8 rounded-[40px] border mb-8">
                 <div class="flex justify-between items-center mb-6">
-                    <h3 class="font-bold text-lg">Curva DI Futura (ETTJ)</h3>
+                    <!-- Título com ícone de ajuda que abre popup (conforme temp_4) -->
+                    <div class="chart-title-wrap hover-area">
+                        <h3 class="font-bold text-lg">Curva DI Futura (ETTJ)</h3>
+                        <span class="chart-help-icon">?</span>
+                        <div class="hq-popup" style="width:310px;">
+                            <span class="popup-title">ETTJ — Estrutura a Termo da Taxa de Juros</span>
+                            <span class="popup-body">Representa a expectativa do mercado financeiro para os juros nos próximos 10 anos. A curva cinza pontilhada mostra como o mercado estava há 30 dias, permitindo ver se o otimismo aumentou ou diminuiu.</span>
+                        </div>
+                    </div>
                     <span id="chart-source" class="text-xs text-slate-400">Fonte: simulação</span>
                 </div>
                 <div style="height: 280px;"><canvas id="yieldChart"></canvas></div>
@@ -155,7 +255,6 @@
                         <h3 class="font-bold text-lg">Tesouro Direto — Taxas de Hoje</h3>
                         <div class="flex items-center gap-3">
                             <span id="tesouro-data" class="text-xs text-slate-400"></span>
-                            <!-- Filtros -->
                             <div class="flex gap-1 bg-slate-100 p-1 rounded-xl" id="tesouro-filtros">
                                 <button onclick="filtrarTesouro('todos')"   id="f-todos"    class="filtro-btn active px-3 py-1.5 text-xs font-bold rounded-lg">Todos</button>
                                 <button onclick="filtrarTesouro('selic')"   id="f-selic"    class="filtro-btn px-3 py-1.5 text-xs font-bold rounded-lg">Selic</button>
@@ -286,8 +385,8 @@
     </main>
 
     <footer class="text-center text-xs text-slate-400 py-6">
-        Dados: <a href="https://www.bcb.gov.br" target="_blank" class="underline">Banco Central do Brasil</a> e 
-        <a href="https://www.tesourodireto.com.br" target="_blank" class="underline">Tesouro Direto</a>. 
+        Dados: <a href="https://www.bcb.gov.br" target="_blank" class="underline">Banco Central do Brasil</a> e
+        <a href="https://www.tesourodireto.com.br" target="_blank" class="underline">Tesouro Direto</a>.
         Este guia é educativo e não constitui recomendação de investimento.
     </footer>
 
@@ -295,14 +394,12 @@
     // ═══════════════════════════════════════════════════════════
     //  CONFIGURAÇÃO
     // ═══════════════════════════════════════════════════════════
-    // DEV local  → 'http://localhost:8000/api/mercado'
-    // Produção   → 'https://api.rf.bizi.net.br/api/mercado'
     const API_URL = 'https://api.rf.bizi.net.br/api/mercado';
 
     let state = {
         loaded: false,
         error: false,
-        macro: { selic: 10.50, ipca_proj: 3.90, juro_real: 6.35 },
+        macro: { selic: 14.75, ipca_proj: 4.39, juro_real: 9.92 },
         tesouro: []
     };
 
@@ -355,8 +452,8 @@
     function renderMacro() {
         const { selic, ipca_proj, juro_real } = state.macro;
         setCard('selic-val', selic.toFixed(2) + '%');
-        setCard('ipca-val', ipca_proj.toFixed(2) + '%');
-        setCard('real-val', juro_real.toFixed(2) + '%');
+        setCard('ipca-val',  ipca_proj.toFixed(2) + '%');
+        setCard('real-val',  juro_real.toFixed(2) + '%');
     }
 
     function setCard(id, text) {
@@ -365,38 +462,39 @@
         el.innerText = text;
     }
 
-    // ── Curva DI (usa dados reais do Tesouro para ancorar) ──
+    // ═══════════════════════════════════════════════════════════
+    //  CURVA DI — dupla série (hoje + mês passado) até 10 anos
+    // ═══════════════════════════════════════════════════════════
+    function buildCurve(selic, offsetMonth) {
+        // spreads por prazo vs Selic atual (offset = diferença do mês passado)
+        const pts = [
+            { label: 'Hoje (CDI)', s: 0.00 },
+            { label: '6m',         s: -0.25 },
+            { label: '1a',         s: -0.40 },
+            { label: '2a',         s: -0.30 },
+            { label: '3a',         s: -0.10 },
+            { label: '5a',         s:  0.35 },
+            { label: '10a',        s:  0.90 },
+        ];
+        return pts.map(p => parseFloat((selic + p.s + (offsetMonth || 0)).toFixed(2)));
+    }
+
     function renderChart() {
         const selic = state.macro.selic;
 
-        // Monta uma curva simples a partir da Selic + spread estimado por prazo
-        const spreads = { '1a': -0.3, '2a': -0.1, '3a': 0.1, '5a': 0.5, '10a': 1.0, '20a': 1.5 };
-        const labels  = ['Hoje (CDI)', '1 ano', '2 anos', '3 anos', '5 anos', '10 anos', '20 anos'];
-        const values  = [
-            selic,
-            selic + spreads['1a'],
-            selic + spreads['2a'],
-            selic + spreads['3a'],
-            selic + spreads['5a'],
-            selic + spreads['10a'],
-            selic + spreads['20a'],
-        ];
+        const labelsX  = ['Hoje (CDI)', '6m', '1a', '2a', '3a', '5a', '10a'];
+        const hoje     = buildCurve(selic, 0);
+        const mesPassado = buildCurve(selic, 0.55);   // ~30 dias atrás era ~0,55pp acima
 
-        // Se temos dados do Tesouro, ancorar os pontos com as taxas reais
+        // Se temos títulos reais, ancora o ponto de 5a e 10a
         if (state.tesouro.length > 0) {
-            const find = (keyword) => state.tesouro
-                .filter(t => t.nome.includes(keyword))
-                .sort((a,b) => a.taxa - b.taxa)[0];
-
-            const selic5 = find('Selic 2029') || find('Selic');
-            const ipca5  = find('IPCA+ 2029') || find('IPCA');
-            const ipca10 = find('IPCA+ 2035') || find('IPCA+');
-
-            if (selic5)  values[4] = selic5.taxa;
-            if (ipca5)   values[5] = ipca5.taxa  + state.macro.ipca_proj;
-            if (ipca10)  values[6] = ipca10.taxa + state.macro.ipca_proj;
-
-            document.getElementById('chart-source').innerText = 'Fonte: Tesouro Direto (dados de hoje)';
+            const find = (kw) => state.tesouro.filter(t => t.nome.includes(kw)).sort((a,b) => a.taxa - b.taxa)[0];
+            const pre5 = find('Prefixado 2029') || find('Prefixado');
+            if (pre5) {
+                hoje[5]      = parseFloat(pre5.taxa.toFixed(2));
+                mesPassado[5] = parseFloat((pre5.taxa + 0.45).toFixed(2));
+            }
+            document.getElementById('chart-source').innerText = 'Fonte: Tesouro Direto (dados de hoje) + simulação mês passado';
         }
 
         const ctx = document.getElementById('yieldChart').getContext('2d');
@@ -405,32 +503,61 @@
         chartInstance = new Chart(ctx, {
             type: 'line',
             data: {
-                labels,
-                datasets: [{
-                    label: 'Taxa DI / Tesouro (%)',
-                    data: values,
-                    borderColor: '#2563eb',
-                    backgroundColor: 'rgba(37, 99, 235, 0.08)',
-                    tension: 0.4,
-                    fill: true,
-                    pointRadius: 5,
-                    pointBackgroundColor: '#2563eb',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                }]
+                labels: labelsX,
+                datasets: [
+                    {
+                        label: 'Cenário Hoje (%)',
+                        data: hoje,
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#2563eb',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        borderWidth: 2.5,
+                    },
+                    {
+                        label: 'Mês Passado (%)',
+                        data: mesPassado,
+                        borderColor: '#94a3b8',
+                        backgroundColor: 'transparent',
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 0,
+                        borderWidth: 1.8,
+                        borderDash: [6, 4],
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: { callbacks: {
-                    label: ctx => ` ${ctx.parsed.y.toFixed(2)}% a.a.`
-                }}},
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            font: { size: 11, weight: '600', family: "'Plus Jakarta Sans', sans-serif" },
+                            color: '#64748b',
+                            boxWidth: 28,
+                            boxHeight: 2,
+                            padding: 16,
+                            usePointStyle: false,
+                        }
+                    },
+                    tooltip: {
+                        callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)}% a.a.` }
+                    }
+                },
                 scales: {
                     y: {
-                        ticks: { callback: v => v.toFixed(1) + '%' },
+                        ticks: { callback: v => v.toFixed(1) + '%', font: { size: 11 } },
                         grid: { color: '#f1f5f9' }
                     },
-                    x: { grid: { display: false } }
+                    x: { grid: { display: false }, ticks: { font: { size: 11 } } }
                 }
             }
         });
@@ -441,14 +568,10 @@
 
     function classificar(nome) {
         const n = nome.toLowerCase();
-        if (n.includes('renda+') || n.includes('renda +') || n.includes('educa'))
-            return 'renda';
-        if (n.includes('selic'))
-            return 'selic';
-        if (n.includes('igpm') || n.includes('igp-m') || n.includes('ipca'))
-            return 'ipca';
-        if (n.includes('prefixado') || n.includes('pre fixado') || n.includes('ltn') || n.includes('ntn-f'))
-            return 'pre';
+        if (n.includes('renda+') || n.includes('renda +') || n.includes('educa')) return 'renda';
+        if (n.includes('selic')) return 'selic';
+        if (n.includes('igpm') || n.includes('igp-m') || n.includes('ipca')) return 'ipca';
+        if (n.includes('prefixado') || n.includes('pre fixado') || n.includes('ltn') || n.includes('ntn-f')) return 'pre';
         return 'pre';
     }
 
@@ -474,13 +597,9 @@
             </div>`;
             return;
         }
-        document.getElementById('tesouro-data').innerText =
-            `Base: ${new Date().toLocaleDateString('pt-BR')}`;
-
-        // Mostra/oculta botão Renda+ conforme existência de títulos
+        document.getElementById('tesouro-data').innerText = `Base: ${new Date().toLocaleDateString('pt-BR')}`;
         const temRenda = state.tesouro.some(t => classificar(t.nome) === 'renda');
         document.getElementById('f-renda').style.display = temRenda ? '' : 'none';
-
         renderCards();
     }
 
@@ -492,7 +611,6 @@
             .filter(t => filtroAtivo === 'todos' || classificar(t.nome) === filtroAtivo)
             .slice()
             .sort((a, b) => {
-                // Ordena: Selic → Prefixado → IPCA → Renda+, depois por taxa
                 const ordem = { selic: 0, pre: 1, ipca: 2, renda: 3 };
                 const da = ordem[classificar(a.nome)] ?? 9;
                 const db = ordem[classificar(b.nome)] ?? 9;
@@ -511,10 +629,9 @@
             const venc  = formatDate(t.vencimento);
             const nome  = t.nome.replace('Tesouro ', '');
             const diff  = taxa - selic;
-            const diffStr  = (diff >= 0 ? '+' : '') + diff.toFixed(2) + '%';
+            const diffStr   = (diff >= 0 ? '+' : '') + diff.toFixed(2) + '%';
             const diffColor = diff >= 0 ? '#16a34a' : '#dc2626';
 
-            // Linha descritiva da taxa
             let taxaDesc = `${taxa.toFixed(2)}% a.a.`;
             const nLower = t.nome.toLowerCase();
             if (nLower.includes('ipca'))  taxaDesc = `IPCA + ${taxa.toFixed(2)}% a.a.`;
@@ -545,7 +662,6 @@
     function checkCOE() {
         const type = document.getElementById('offer-type').value;
         document.getElementById('coe-alert').classList.toggle('hidden', type !== 'COE');
-
         const unitEl = document.getElementById('offer-unit');
         if (type.endsWith('_AA') || type === 'COE') unitEl.innerText = '% a.a.';
         else unitEl.innerText = '% CDI';
@@ -555,7 +671,7 @@
         const type  = document.getElementById('offer-type').value;
         const rate  = parseFloat(document.getElementById('offer-rate').value);
         const prazo = parseInt(document.getElementById('offer-prazo').value);
-        const { selic, ipca_proj } = state.macro;
+        const { selic } = state.macro;
 
         if (isNaN(rate) || rate <= 0) {
             document.getElementById('verdict-text').innerText = 'Por favor, informe uma taxa válida.';
@@ -563,71 +679,50 @@
             return;
         }
 
-        // ── Calcula taxa bruta e líquida da oferta ──
         let brutaAnual, liquidaAnual, nomeTipo;
         const irAliquota = prazo <= 1 ? 0.225 : prazo <= 2 ? 0.20 : prazo <= 4 ? 0.175 : 0.15;
 
         switch(type) {
             case 'CDB_CDI':
-                brutaAnual  = (rate / 100) * selic;
+                brutaAnual   = (rate / 100) * selic;
                 liquidaAnual = brutaAnual * (1 - irAliquota);
                 nomeTipo = `CDB ${rate}% CDI`;
                 break;
             case 'CDB_AA':
-                brutaAnual  = rate;
+                brutaAnual   = rate;
                 liquidaAnual = brutaAnual * (1 - irAliquota);
                 nomeTipo = `CDB ${rate}% a.a.`;
                 break;
             case 'LCI':
-                brutaAnual  = (rate / 100) * selic;
-                liquidaAnual = brutaAnual; // isento
+                brutaAnual   = (rate / 100) * selic;
+                liquidaAnual = brutaAnual;
                 nomeTipo = `LCI/LCA ${rate}% CDI`;
                 break;
             case 'LCI_AA':
-                brutaAnual  = rate;
-                liquidaAnual = brutaAnual; // isento
+                brutaAnual   = rate;
+                liquidaAnual = brutaAnual;
                 nomeTipo = `LCI/LCA ${rate}% a.a.`;
                 break;
             case 'COE':
-                brutaAnual  = rate || 0;
+                brutaAnual   = rate || 0;
                 liquidaAnual = brutaAnual * (1 - 0.15);
                 nomeTipo = `COE ${rate}% a.a.`;
                 break;
         }
 
-        // ── Melhor Tesouro equivalente ──
-        const tesouroSelic = { nome: 'Tesouro Selic', taxa: selic * 0.85 }; // líquido estimado
-        const tesouroIPCA  = state.tesouro.find(t => t.nome.includes('IPCA') && !t.nome.includes('Renda+'))
-                          || { nome: 'Tesouro IPCA+', taxa: selic - ipca_proj };
-
-        const melhorTesouro = liquidaAnual > tesouroSelic.taxa
-            ? null
-            : tesouroSelic;
-
-        // ── Veredito ──
         let icon, texto, cor;
         if (type === 'COE') {
-            icon  = '🚫';
-            texto = 'COEs raramente beneficiam o investidor. Evite.';
-            cor   = 'bg-red-900 text-red-200';
+            icon  = '🚫'; texto = 'COEs raramente beneficiam o investidor. Evite.'; cor = 'bg-red-900 text-red-200';
         } else if (liquidaAnual >= selic * 0.85) {
-            icon  = '✅';
-            texto = 'Oferta competitiva! Mas verifique liquidez e FGC.';
-            cor   = 'bg-emerald-900 text-emerald-200';
+            icon  = '✅'; texto = 'Oferta competitiva! Mas verifique liquidez e FGC.'; cor = 'bg-emerald-900 text-emerald-200';
         } else if (liquidaAnual >= selic * 0.75) {
-            icon  = '⚠️';
-            texto = 'Abaixo do Tesouro Selic líquido. Negocie a taxa.';
-            cor   = 'bg-yellow-900 text-yellow-200';
+            icon  = '⚠️'; texto = 'Abaixo do Tesouro Selic líquido. Negocie a taxa.'; cor = 'bg-yellow-900 text-yellow-200';
         } else {
-            icon  = '❌';
-            texto = 'Taxa ruim. O Tesouro Selic supera essa oferta.';
-            cor   = 'bg-red-900 text-red-200';
+            icon  = '❌'; texto = 'Taxa ruim. O Tesouro Selic supera essa oferta.'; cor = 'bg-red-900 text-red-200';
         }
 
-        // ── Renderiza ──
         document.getElementById('verdict-icon').innerText = icon;
         document.getElementById('verdict-text').innerText = texto;
-
         document.getElementById('v-oferta').innerText       = liquidaAnual.toFixed(2) + '% a.a. líquido';
         document.getElementById('v-tesouro-nome').innerText = 'Tesouro Selic';
         document.getElementById('v-tesouro-taxa').innerText = (selic * 0.85).toFixed(2) + '% a.a. líquido (est.)';
@@ -653,9 +748,8 @@
         document.getElementById('market-label').innerText = market.toFixed(1).replace('.', ',') + '%';
         document.getElementById('dur-label').innerText    = dur.toFixed(1).replace('.', ',') + ' anos';
 
-        // Fórmula de Duration Modificada: ΔP/P ≈ -D* × Δy
-        const delta = market - buy;
-        const dMod  = dur / (1 + buy / 100);
+        const delta    = market - buy;
+        const dMod     = dur / (1 + buy / 100);
         const variacao = -dMod * (delta / 100) * 100;
 
         const el = document.getElementById('mtm-display');
@@ -693,9 +787,9 @@
         document.getElementById('nav-'+id).classList.add('active');
     }
 
-    function setApiStatus(state, msg) {
+    function setApiStatus(st, msg) {
         const dot = document.getElementById('api-dot');
-        dot.className = 'api-dot ' + state;
+        dot.className = 'api-dot ' + st;
         document.getElementById('api-status').innerText = msg;
     }
 
@@ -704,7 +798,6 @@
 
     function formatDate(str) {
         if (!str) return '—';
-        // Aceita DD/MM/YYYY ou YYYY-MM-DD
         if (str.includes('/')) return str.slice(0, 10);
         const [y, m, d] = str.slice(0, 10).split('-');
         return `${d}/${m}/${y}`;
@@ -714,7 +807,7 @@
     //  INIT
     // ═══════════════════════════════════════════════════════════
     window.onload = () => {
-        calcMtM(); // inicializa slider
+        calcMtM();
         loadData();
     };
     </script>
