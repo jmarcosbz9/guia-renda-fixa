@@ -528,6 +528,7 @@
                         pointRadius: 0,
                         borderWidth: 1.8,
                         borderDash: [6, 4],
+                        borderDashOffset: 0,
                     }
                 ]
             },
@@ -542,10 +543,22 @@
                         labels: {
                             font: { size: 11, weight: '600', family: "'Plus Jakarta Sans', sans-serif" },
                             color: '#64748b',
-                            boxWidth: 28,
+                            boxWidth: 32,
                             boxHeight: 2,
-                            padding: 16,
+                            padding: 18,
                             usePointStyle: false,
+                            generateLabels(chart) {
+                                return chart.data.datasets.map((d, i) => ({
+                                    text: d.label,
+                                    fillStyle: 'transparent',
+                                    strokeStyle: d.borderColor,
+                                    lineWidth: d.borderWidth || 2,
+                                    lineDash: d.borderDash || [],
+                                    hidden: !chart.isDatasetVisible(i),
+                                    datasetIndex: i,
+                                    fontColor: '#64748b',
+                                }));
+                            },
                         }
                     },
                     tooltip: {
@@ -605,7 +618,6 @@
 
     function renderCards() {
         const container = document.getElementById('tesouro-cards');
-        const selic     = state.macro.selic;
 
         const lista = state.tesouro
             .filter(t => filtroAtivo === 'todos' || classificar(t.nome) === filtroAtivo)
@@ -622,35 +634,79 @@
             return;
         }
 
-        container.innerHTML = lista.map(t => {
-            const tipo  = classificar(t.nome);
-            const cfg   = TIPO_CONFIG[tipo] || TIPO_CONFIG.pre;
-            const taxa  = parseFloat(t.taxa);
-            const venc  = formatDate(t.vencimento);
-            const nome  = t.nome.replace('Tesouro ', '');
-            const diff  = taxa - selic;
-            const diffStr   = (diff >= 0 ? '+' : '') + diff.toFixed(2) + '%';
-            const diffColor = diff >= 0 ? '#16a34a' : '#dc2626';
+        // Cores de borda por tipo (mapeado para a borda esquerda do card)
+        const BORDER_COLOR = { selic: '#16a34a', pre: '#2563eb', ipca: '#7c3aed', renda: '#ea580c' };
+        const RENT_COLOR   = { selic: '#15803d', pre: '#1d4ed8', ipca: '#6d28d9', renda: '#c2410c' };
+        const BG_COLOR     = { selic: '#f0fdf4', pre: '#eff6ff', ipca: '#faf5ff', renda: '#fff7ed' };
 
-            let taxaDesc = `${taxa.toFixed(2)}% a.a.`;
-            const nLower = t.nome.toLowerCase();
-            if (nLower.includes('ipca'))  taxaDesc = `IPCA + ${taxa.toFixed(2)}% a.a.`;
-            if (nLower.includes('igpm') || nLower.includes('igp-m')) taxaDesc = `IGPM + ${taxa.toFixed(2)}% a.a.`;
-            if (nLower.includes('selic')) taxaDesc = `Selic + ${taxa.toFixed(2)}% a.a.`;
-            if (tipo === 'renda')         taxaDesc = `IPCA + ${taxa.toFixed(2)}% a.a.`;
+        container.innerHTML = lista.map(t => {
+            const tipo   = classificar(t.nome);
+            const cfg    = TIPO_CONFIG[tipo] || TIPO_CONFIG.pre;
+            const taxa   = parseFloat(t.taxa);
+            const venc   = formatDate(t.vencimento);
+
+            // Título: remove "Tesouro " e quebra em tipo + ano
+            // ex: "Tesouro Prefixado com Juros Semestrais 2029" → tipo="TESOURO PREFIXADO" ano="2029"
+            const semTesouro = t.nome.replace(/^Tesouro\s+/i, '');
+            const anoMatch   = semTesouro.match(/\d{4}$/);
+            const ano        = anoMatch ? anoMatch[0] : '';
+            const tipoNome   = semTesouro.replace(/\s*\d{4}$/, '').trim();
+
+            // Rentabilidade: usa label do backend se disponível, senão reconstrói
+            const rentLabel = t.rentabilidade_label || (() => {
+                const n = t.nome.toLowerCase();
+                if (n.includes('ipca'))  return `IPCA + ${taxa.toFixed(2)}% a.a.`;
+                if (n.includes('selic')) return `Selic + ${taxa.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}% a.a.`;
+                return `${taxa.toFixed(2)}% a.a.`;
+            })();
+
+            // Valor mínimo
+            const vmStr = (t.valor_minimo != null)
+                ? `R$ ${parseFloat(t.valor_minimo).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : '—';
+
+            const bColor = BORDER_COLOR[tipo] || '#2563eb';
+            const rColor = RENT_COLOR[tipo]   || '#1d4ed8';
+            const bgCol  = BG_COLOR[tipo]     || '#eff6ff';
 
             return `
-            <div class="tesouro-card ${cfg.cardClass}">
-                <div style="flex:1">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                        <span class="card-badge ${cfg.badgeClass}">${cfg.label}</span>
-                        <span style="font-size:0.7rem;color:#94a3b8">Venc. ${venc}</span>
+            <div style="
+                display:flex; align-items:stretch;
+                background:${bgCol}; border-radius:14px; margin-bottom:0.6rem;
+                border:1px solid ${bColor}22; overflow:hidden;
+                transition:transform 0.15s, box-shadow 0.15s;
+            " onmouseover="this.style.transform='translateX(3px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'"
+               onmouseout="this.style.transform='';this.style.boxShadow=''">
+
+                <!-- Faixa colorida lateral -->
+                <div style="width:5px;flex-shrink:0;background:${bColor};border-radius:14px 0 0 14px;"></div>
+
+                <!-- Corpo do card -->
+                <div style="flex:1; display:flex; align-items:center; justify-content:space-between; padding:1rem 1.25rem; gap:1rem;">
+
+                    <!-- Esquerda: Badge + Nome + Ano (estilo Tesouro Direto) -->
+                    <div style="min-width:0;">
+                        <span class="card-badge ${cfg.badgeClass}" style="margin-bottom:4px;display:inline-block">${cfg.label.toUpperCase()}</span>
+                        <div style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;line-height:1.2">${tipoNome}</div>
+                        <div style="font-size:1.6rem;font-weight:800;color:#0f172a;line-height:1.1;">${ano}</div>
                     </div>
-                    <div style="font-weight:700;font-size:0.95rem;color:#1e293b">${nome}</div>
-                </div>
-                <div style="text-align:right;flex-shrink:0;margin-left:1rem">
-                    <div class="${cfg.taxaClass}" style="font-size:1.25rem;font-weight:900;line-height:1">${taxaDesc}</div>
-                    <div style="font-size:0.72rem;font-weight:600;color:${diffColor};margin-top:3px">${diffStr} vs Selic</div>
+
+                    <!-- Centro: Rentabilidade + Vencimento + Valor Mínimo -->
+                    <div style="flex:1; display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem 1rem; text-align:left;">
+                        <div>
+                            <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;margin-bottom:2px;">Rentabilidade</div>
+                            <div style="font-size:0.88rem;font-weight:800;color:${rColor};">${rentLabel}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;margin-bottom:2px;">Vencimento</div>
+                            <div style="font-size:0.88rem;font-weight:700;color:#334155;">${venc}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;margin-bottom:2px;">Valor Mínimo</div>
+                            <div style="font-size:0.88rem;font-weight:700;color:#334155;">${vmStr}</div>
+                        </div>
+                    </div>
+
                 </div>
             </div>`;
         }).join('');
