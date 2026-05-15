@@ -17,17 +17,41 @@ app.add_middleware(
 )
 
 # ─────────────────────────────────────────
-#  CACHE em memória
+#  CACHE em memória + persistência em disco
 #  Atualizado 1x/dia pelo cron às 10:30 BRT
+#  Sobrevive a restarts do Railway via arquivo JSON
 # ─────────────────────────────────────────
+import json
+import os
+
+CACHE_FILE = "/tmp/tesouro_cache.json"
+
 cache = {
     "tesouro":       [],
     "atualizado_em": None,
 }
 
-# Sem fallback hardcoded — dados inventados são piores que nenhum dado.
-# Se todas as fontes falharem, o frontend exibe aviso de indisponibilidade.
-TESOURO_FALLBACK = []
+def salvar_cache():
+    try:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"  ⚠ Erro ao salvar cache em disco: {e}")
+
+def carregar_cache():
+    try:
+        if os.path.exists(CACHE_FILE):
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+            if dados.get("tesouro"):
+                cache["tesouro"]       = dados["tesouro"]
+                cache["atualizado_em"] = dados.get("atualizado_em")
+                print(f"  ✓ Cache restaurado do disco: {len(cache['tesouro'])} títulos (atualizado em {cache['atualizado_em']})")
+    except Exception as e:
+        print(f"  ⚠ Erro ao carregar cache do disco: {e}")
+
+# Carrega cache salvo imediatamente ao iniciar
+carregar_cache()
 
 # ─────────────────────────────────────────
 #  Busca Selic / IPCA no SGS do Banco Central
@@ -188,6 +212,7 @@ def atualizar_tesouro():
         if lista:
             cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+            salvar_cache()
             print(f"  ✓ {len(lista)} títulos via radaropcoes (Fonte 1).")
             return
         # Lista vazia = mercado fechado ou sem negociação agora
@@ -221,6 +246,7 @@ def atualizar_tesouro():
             if lista:
                 cache["tesouro"]       = lista
                 cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                salvar_cache()
                 print(f"  ✓ {len(lista)} títulos via API B3 session: {url_b3.split('/')[-1]}")
                 return
             print(f"  ⚠ API B3 vazia: {url_b3.split('/')[-1]}")
@@ -275,6 +301,7 @@ def atualizar_tesouro():
         if lista:
             cache["tesouro"]       = lista
             cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+            salvar_cache()
             print(f"  ✓ {len(lista)} títulos via CSV (Fonte 3).")
             return
     except Exception as e:
