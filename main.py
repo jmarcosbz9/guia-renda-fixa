@@ -25,17 +25,9 @@ cache = {
     "atualizado_em": None,
 }
 
-# Fallback com valor_minimo incluído (dados de mai/2026)
-TESOURO_FALLBACK = [
-    {"nome": "Tesouro Selic 2027",               "taxa":  0.01, "vencimento": "01/03/2027", "valor_minimo":  189.44, "rentabilidade_label": "Selic + 0,01% a.a."},
-    {"nome": "Tesouro Selic 2029",               "taxa":  0.05, "vencimento": "01/03/2029", "valor_minimo":  192.10, "rentabilidade_label": "Selic + 0,05% a.a."},
-    {"nome": "Tesouro Prefixado 2027",           "taxa": 13.92, "vencimento": "01/01/2027", "valor_minimo":   30.87, "rentabilidade_label": "13,92% a.a."},
-    {"nome": "Tesouro Prefixado 2029",           "taxa": 13.98, "vencimento": "01/01/2029", "valor_minimo":   25.40, "rentabilidade_label": "13,98% a.a."},
-    {"nome": "Tesouro Prefixado com Juros Semestrais 2029", "taxa": 13.99, "vencimento": "01/01/2029", "valor_minimo": 1041.12, "rentabilidade_label": "13,99% a.a."},
-    {"nome": "Tesouro IPCA+ 2029",               "taxa":  7.23, "vencimento": "15/05/2029", "valor_minimo":   34.20, "rentabilidade_label": "IPCA + 7,23% a.a."},
-    {"nome": "Tesouro IPCA+ 2035",               "taxa":  7.38, "vencimento": "15/05/2035", "valor_minimo":   29.80, "rentabilidade_label": "IPCA + 7,38% a.a."},
-    {"nome": "Tesouro IPCA+ 2045",               "taxa":  7.42, "vencimento": "15/05/2045", "valor_minimo":   40.90, "rentabilidade_label": "IPCA + 7,42% a.a."},
-]
+# Sem fallback hardcoded — dados inventados são piores que nenhum dado.
+# Se todas as fontes falharem, o frontend exibe aviso de indisponibilidade.
+TESOURO_FALLBACK = []
 
 # ─────────────────────────────────────────
 #  Busca Selic / IPCA no SGS do Banco Central
@@ -222,14 +214,10 @@ def atualizar_tesouro():
     except Exception as e:
         print(f"  ✗ Erro no mirror: {e}")
 
-    # ── Fallback hardcoded ──
-    if not cache["tesouro"]:
-        cache["tesouro"]       = TESOURO_FALLBACK
-        cache["atualizado_em"] = "fallback"
-        print("  ✗ Usando fallback hardcoded.")
-    # NOTA: O CSV histórico (Fonte 3) foi REMOVIDO intencionalmente.
-    # Ele contém todos os títulos já emitidos, inclusive os fora de
-    # negociação, o que é inadequado para um guia de investimento.
+    # ── Todas as fontes falharam ──
+    # Cache permanece vazio → frontend exibe aviso de indisponibilidade.
+    # Melhor mostrar nada do que dados desatualizados ou inventados.
+    print("  ✗ Todas as fontes falharam. Cache de títulos vazio.")
 
 
 # ─────────────────────────────────────────
