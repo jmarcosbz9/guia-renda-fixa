@@ -1,42 +1,55 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-from datetime import datetime
-import pandas as pd
-import requests
-import io
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ─────────────────────────────────────────
-#  CACHE em memória + persistência em disco
-#  Atualizado 1x/dia pelo cron às 10:30 BRT
-#  Sobrevive a restarts do Railway via arquivo JSON
-# ─────────────────────────────────────────
 import json
 import os
+from datetime import datetime
 
-CACHE_FILE = "/tmp/tesouro_cache.json"
+import requests
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "muda-este-token-em-producao")
+CACHE_FILE  = "/tmp/tesouro_cache.json"
+MANUAL_FILE = os.path.join(os.path.dirname(__file__), "data", "tesouro_manual.json")
 
 cache = {
-    "tesouro":       [],
-    "atualizado_em": None,
+    "tesouro":               [],
+    "tesouro_status":        "indisponivel",
+    "tesouro_fonte":         None,
+    "tesouro_atualizado_em": None,
+    "tesouro_erro_resumido": None,
 }
+
+MANUAL_EMBUTIDO = [
+    {"nome": "Tesouro Selic 2031",                         "taxa": 0.08,  "rentabilidade_label": "Selic + 0,08% a.a.", "valor_minimo": 189.44, "vencimento": "01/03/2031"},
+    {"nome": "Tesouro Prefixado 2028",                     "taxa": 13.87, "rentabilidade_label": "13,87% a.a.",        "valor_minimo":  30.20, "vencimento": "01/01/2028"},
+    {"nome": "Tesouro Prefixado 2029",                     "taxa": 13.98, "rentabilidade_label": "13,98% a.a.",        "valor_minimo":  25.40, "vencimento": "01/01/2029"},
+    {"nome": "Tesouro Prefixado com Juros Semestrais 2029","taxa": 13.99, "rentabilidade_label": "13,99% a.a.",        "valor_minimo":1041.12, "vencimento": "01/01/2029"},
+    {"nome": "Tesouro IPCA+ 2029",                         "taxa":  7.23, "rentabilidade_label": "IPCA + 7,23% a.a.", "valor_minimo":  34.20, "vencimento": "15/05/2029"},
+    {"nome": "Tesouro IPCA+ 2035",                         "taxa":  7.38, "rentabilidade_label": "IPCA + 7,38% a.a.", "valor_minimo":  29.80, "vencimento": "15/05/2035"},
+    {"nome": "Tesouro IPCA+ com Juros Semestrais 2032",    "taxa":  7.81, "rentabilidade_label": "IPCA + 7,81% a.a.", "valor_minimo":  29.49, "vencimento": "15/08/2032"},
+    {"nome": "Tesouro IPCA+ com Juros Semestrais 2037",    "taxa":  7.54, "rentabilidade_label": "IPCA + 7,54% a.a.", "valor_minimo":  42.01, "vencimento": "15/05/2037"},
+]
+
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "pt-BR,pt;q=0.9",
+    "Referer": "https://www.tesourodireto.com.br/",
+    "Origin":  "https://www.tesourodireto.com.br",
+}
+
 
 def salvar_cache():
     try:
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache, f, ensure_ascii=False)
+            json.dump(dict(cache), f, ensure_ascii=False)
     except Exception as e:
-        print(f"  ⚠ Erro ao salvar cache em disco: {e}")
+        print(f"  ⚠ salvar_cache: {e}")
+
 
 def carregar_cache():
     try:
@@ -44,344 +57,237 @@ def carregar_cache():
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
                 dados = json.load(f)
             if dados.get("tesouro"):
-                cache["tesouro"]       = dados["tesouro"]
-                cache["atualizado_em"] = dados.get("atualizado_em")
-                print(f"  ✓ Cache restaurado do disco: {len(cache['tesouro'])} títulos (atualizado em {cache['atualizado_em']})")
+                cache.update(dados)
+                print(f"  ✓ Cache do disco: {len(cache['tesouro'])} títulos (status={cache['tesouro_status']})")
     except Exception as e:
-        print(f"  ⚠ Erro ao carregar cache do disco: {e}")
+        print(f"  ⚠ carregar_cache: {e}")
 
-# Carrega cache salvo imediatamente ao iniciar
-carregar_cache()
 
-# ─────────────────────────────────────────
-#  Busca Selic / IPCA no SGS do Banco Central
-# ─────────────────────────────────────────
 def get_bacen_data(serie):
     try:
-        url = (
-            f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{serie}"
-            f"/dados/ultimos/1?formato=json"
-        )
-        r = requests.get(url, timeout=5)
-        return float(r.json()[0]['valor'])
+        r = requests.get(
+            f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{serie}/dados/ultimos/1?formato=json",
+            timeout=5)
+        return float(r.json()[0]["valor"])
     except Exception:
         return None
 
 
-# ─────────────────────────────────────────
-#  Parser do CSV "rendimento-investir"
-#  Estrutura típica do CSV do Tesouro:
-#  Nome;Rentabilidade;Valor Mínimo;Vencimento
-#  (pode ter colunas extras no meio)
-# ─────────────────────────────────────────
-def parse_rentabilidade(rent_str):
-    """
-    Recebe strings como:
-      'IPCA + 7,23%'  → tipo='ipca',  taxa=7.23,  label='IPCA + 7,23% a.a.'
-      'Selic + 0,05%' → tipo='selic', taxa=0.05,  label='Selic + 0,05% a.a.'
-      '13,92%'        → tipo='pre',   taxa=13.92, label='13,92% a.a.'
-    """
-    s = rent_str.strip().strip('"')
-    num_str = s.replace('%', '').split('+')[-1].strip().replace(',', '.')
-    try:
-        taxa = float(num_str)
-    except Exception:
-        return None, None, s
-
-    s_lower = s.lower()
-    if 'ipca' in s_lower:
-        label = f"IPCA + {taxa:.2f}% a.a.".replace('.', ',')
-    elif 'selic' in s_lower:
-        label = f"Selic + {taxa:.4g}% a.a.".replace('.', ',')
-    else:
-        label = f"{taxa:.2f}% a.a.".replace('.', ',')
-
-    return taxa, label
+def is_html(text):
+    return "<!DOCTYPE" in text[:100] or "<html" in text[:100]
 
 
-def parse_valor_minimo(val_str):
-    """'R$189,44' ou '189.44' ou '189,44' → float"""
-    try:
-        s = val_str.strip().strip('"').replace('R$', '').replace(' ', '')
-        # Formato brasileiro: ponto = milhar, vírgula = decimal
-        if '.' in s and ',' in s:
-            s = s.replace('.', '').replace(',', '.')
-        elif ',' in s:
-            s = s.replace(',', '.')
-        return round(float(s), 2)
-    except Exception:
-        return None
-
-
-# ─────────────────────────────────────────
-#  Headers que simulam browser real
-#  Necessário: tesourodireto.com.br usa
-#  Cloudflare Bot Management que bloqueia
-#  requests sem headers de browser.
-# ─────────────────────────────────────────
-BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept":          "application/json, text/plain, */*",
-    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Referer":         "https://www.tesourodireto.com.br/",
-    "Origin":          "https://www.tesourodireto.com.br",
-    "Connection":      "keep-alive",
-    "sec-ch-ua":       '"Chromium";v="124", "Google Chrome";v="124"',
-    "sec-ch-ua-platform": '"Windows"',
-    "Sec-Fetch-Dest":  "empty",
-    "Sec-Fetch-Mode":  "cors",
-    "Sec-Fetch-Site":  "same-origin",
-}
-
-
-def parse_b3_bond(bond: dict) -> dict | None:
-    """Converte um item da API JSON da B3 para o formato interno."""
+def parse_b3_bond(bond):
     nome = bond.get("nm", "")
     if not nome:
         return None
     if not nome.lower().startswith("tesouro"):
         nome = f"Tesouro {nome}"
-
-    taxa = bond.get("anulInvstmtRate") or bond.get("anulRedRate") or 0
-    venc = (bond.get("mtrtyDt") or "")[:10]
-    vmin = bond.get("minInvstmtAmt") or bond.get("untrInvstmtVal")
-
+    taxa = float(bond.get("anulInvstmtRate") or bond.get("anulRedRate") or 0)
     if not taxa:
         return None
+    venc = (bond.get("mtrtyDt") or "")[:10]
     if "-" in venc:
-        y, m, d = venc.split("-")
-        venc = f"{d}/{m}/{y}"
-
-    taxa_f = float(taxa)
-    n = nome.lower()
-    if "ipca" in n:
-        label = f"IPCA + {taxa_f:.2f}% a.a.".replace(".", ",")
-    elif "selic" in n:
-        label = f"Selic + {taxa_f:.4g}% a.a.".replace(".", ",")
-    else:
-        label = f"{taxa_f:.2f}% a.a.".replace(".", ",")
-
+        y, m, d = venc.split("-"); venc = f"{d}/{m}/{y}"
     try:
-        vmin_f = round(float(vmin), 2) if vmin else None
+        vmin = round(float(bond.get("minInvstmtAmt") or bond.get("untrInvstmtVal") or 0), 2) or None
     except Exception:
-        vmin_f = None
-
-    return {
-        "nome":                nome,
-        "taxa":                taxa_f,
-        "rentabilidade_label": label,
-        "valor_minimo":        vmin_f,
-        "vencimento":          venc,
-    }
+        vmin = None
+    n = nome.lower()
+    label = (f"IPCA + {taxa:.2f}% a.a." if "ipca" in n
+             else f"Selic + {taxa:.4g}% a.a." if "selic" in n
+             else f"{taxa:.2f}% a.a.").replace(".", ",")
+    return {"nome": nome, "taxa": taxa, "rentabilidade_label": label,
+            "valor_minimo": vmin, "vencimento": venc}
 
 
-# ─────────────────────────────────────────
-#  Atualiza cache — tentativa em cascata
-#  Regra: só sobrescreve o cache se a nova
-#  lista tiver títulos. Cache anterior é
-#  preservado se todas as fontes falharem
-#  ou retornarem vazio (mercado fechado).
-# ─────────────────────────────────────────
-def atualizar_tesouro():
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Atualizando dados do Tesouro...")
+def tentar_radaropcoes():
+    r = requests.get("https://api.radaropcoes.com/bonds.json",
+                     headers=BROWSER_HEADERS, timeout=10)
+    r.raise_for_status()
+    bonds = r.json().get("response", {}).get("TrsrBdTradgList", [])
+    lista = [x for x in (parse_b3_bond(i.get("TrsrBd", {})) for i in bonds) if x]
+    return lista or None
 
-    # ── Fonte 1: radaropcoes — mirror público da API B3 ──
-    # Mais confiável: não exige session/cookies, CORS aberto,
-    # estrutura idêntica à API interna da B3.
-    try:
-        resp = requests.get(
-            "https://api.radaropcoes.com/bonds.json",
-            timeout=10,
-            headers=BROWSER_HEADERS,
-        )
-        resp.raise_for_status()
-        data  = resp.json()
-        bonds = data.get("response", {}).get("TrsrBdTradgList", [])
-        lista = []
-        for item in bonds:
-            bond   = item.get("TrsrBd", {})
-            parsed = parse_b3_bond(bond)
-            if parsed:
-                lista.append(parsed)
 
-        if lista:
-            cache["tesouro"]       = lista
-            cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            salvar_cache()
-            print(f"  ✓ {len(lista)} títulos via radaropcoes (Fonte 1).")
-            return
-        # Lista vazia = mercado fechado ou sem negociação agora
-        # NÃO limpar o cache — mantém o último dado válido
-        print("  ⚠ radaropcoes retornou lista vazia (mercado fechado?). Cache preservado.")
-
-    except Exception as e:
-        print(f"  ✗ Erro radaropcoes: {e}")
-
-    # ── Fonte 2: API B3 via session (treasurybondsinfo) ──
-    for url_b3 in [
+def tentar_b3_json():
+    for url in [
         "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto/service/api/treasurybondsinfo.json",
         "https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto/model/entity/PublicTitle.json",
     ]:
         try:
-            session = requests.Session()
-            session.get("https://www.tesourodireto.com.br/",
-                        headers=BROWSER_HEADERS, timeout=10)
-            resp = session.get(url_b3, headers=BROWSER_HEADERS, timeout=10)
-            resp.raise_for_status()
-            if "<!DOCTYPE" in resp.text[:50]:
-                raise ValueError("Cloudflare challenge HTML recebido")
-            data  = resp.json()
-            bonds = data.get("response", {}).get("TrsrBdTradgList", [])
-            lista = []
-            for item in bonds:
-                bond   = item.get("TrsrBd", {})
-                parsed = parse_b3_bond(bond)
-                if parsed:
-                    lista.append(parsed)
+            s = requests.Session()
+            s.get("https://www.tesourodireto.com.br/", headers=BROWSER_HEADERS, timeout=8)
+            r = s.get(url, headers=BROWSER_HEADERS, timeout=10)
+            r.raise_for_status()
+            if is_html(r.text):
+                continue
+            bonds = r.json().get("response", {}).get("TrsrBdTradgList", [])
+            lista = [x for x in (parse_b3_bond(i.get("TrsrBd", {})) for i in bonds) if x]
             if lista:
-                cache["tesouro"]       = lista
-                cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-                salvar_cache()
-                print(f"  ✓ {len(lista)} títulos via API B3 session: {url_b3.split('/')[-1]}")
-                return
-            print(f"  ⚠ API B3 vazia: {url_b3.split('/')[-1]}")
+                return lista
         except Exception as e:
-            print(f"  ✗ Erro API B3 ({url_b3.split('/')[-1]}): {e}")
+            print(f"    ✗ B3 {url.split('/')[-1]}: {e}")
+    return None
 
-    # ── Fonte 3: CSV rendimento-investir via session ──
+
+def tentar_csv():
+    s = requests.Session()
+    s.get("https://www.tesourodireto.com.br/", headers=BROWSER_HEADERS, timeout=8)
+    r = s.get(
+        "https://www.tesourodireto.com.br/documents/d/guest/rendimento-investir-csv?download=true",
+        headers=BROWSER_HEADERS, timeout=10)
+    r.raise_for_status()
+    if is_html(r.text):
+        raise ValueError("Cloudflare challenge")
+    linhas = r.text.strip().split("\n")
+    hdr = [h.strip().strip('"').lower() for h in linhas[0].split(";")]
     try:
-        session = requests.Session()
-        session.get("https://www.tesourodireto.com.br/",
-                    headers=BROWSER_HEADERS, timeout=10)
-        resp = session.get(
-            "https://www.tesourodireto.com.br/documents/d/guest/"
-            "rendimento-investir-csv?download=true",
-            headers=BROWSER_HEADERS, timeout=10,
-        )
-        resp.raise_for_status()
-        if "<!DOCTYPE" in resp.text[:50]:
-            raise ValueError("Cloudflare challenge HTML recebido")
-
-        linhas = resp.text.strip().split("\n")
-        header = [h.strip().strip('"').lower() for h in linhas[0].split(";")]
-        print(f"  Header CSV: {header}")
+        in_ = next(i for i, h in enumerate(hdr) if "nome" in h or "titulo" in h)
+        ir  = next(i for i, h in enumerate(hdr) if "rentab" in h)
+        iv  = next(i for i, h in enumerate(hdr) if "valor" in h)
+        ivenc = next(i for i, h in enumerate(hdr) if "venc" in h)
+    except StopIteration:
+        in_, ir, iv, ivenc = 0, 1, 2, 3
+    lista = []
+    for ln in linhas[1:]:
+        p = ln.strip().split(";")
+        def g(i): return p[i].strip().strip('"') if i < len(p) else ""
+        nome = g(in_)
+        if not nome: continue
+        if not nome.lower().startswith("tesouro"): nome = f"Tesouro {nome}"
+        s_rent = g(ir)
+        num = s_rent.replace("%","").split("+")[-1].strip().replace(",",".")
+        try: taxa = float(num)
+        except: continue
+        n = nome.lower()
+        label = (f"IPCA + {taxa:.2f}% a.a." if "ipca" in n
+                 else f"Selic + {taxa:.4g}% a.a." if "selic" in n
+                 else f"{taxa:.2f}% a.a.").replace(".", ",")
+        s_vmin = g(iv).replace("R$","").replace(" ","")
         try:
-            idx_nome = next(i for i, h in enumerate(header) if "nome" in h or "titulo" in h)
-            idx_rent = next(i for i, h in enumerate(header) if "rentab" in h)
-            idx_vmin = next(i for i, h in enumerate(header) if "valor" in h)
-            idx_venc = next(i for i, h in enumerate(header) if "venc" in h)
-        except StopIteration:
-            idx_nome, idx_rent, idx_vmin, idx_venc = 0, 1, 2, 3
-        lista = []
-        for linha in linhas[1:]:
-            partes = linha.strip().split(";")
-            if len(partes) < 3:
-                continue
-            def get(i):
-                return partes[i].strip().strip('"') if i < len(partes) else ""
-            nome = get(idx_nome)
-            if not nome:
-                continue
-            if not nome.lower().startswith("tesouro"):
-                nome = f"Tesouro {nome}"
-            taxa, label = parse_rentabilidade(get(idx_rent))
-            if taxa is None:
-                continue
-            lista.append({
-                "nome": nome, "taxa": taxa,
-                "rentabilidade_label": label or get(idx_rent),
-                "valor_minimo": parse_valor_minimo(get(idx_vmin)),
-                "vencimento": get(idx_venc).strip(),
-            })
-        if lista:
-            cache["tesouro"]       = lista
-            cache["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-            salvar_cache()
-            print(f"  ✓ {len(lista)} títulos via CSV (Fonte 3).")
-            return
+            if "." in s_vmin and "," in s_vmin: s_vmin = s_vmin.replace(".","").replace(",",".")
+            elif "," in s_vmin: s_vmin = s_vmin.replace(",",".")
+            vmin = round(float(s_vmin), 2)
+        except: vmin = None
+        lista.append({"nome": nome, "taxa": taxa, "rentabilidade_label": label,
+                      "valor_minimo": vmin, "vencimento": g(ivenc).strip()})
+    return lista or None
+
+
+def carregar_manual():
+    try:
+        if os.path.exists(MANUAL_FILE):
+            with open(MANUAL_FILE, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+            if dados:
+                return dados, "base manual (arquivo data/tesouro_manual.json)"
     except Exception as e:
-        print(f"  ✗ Erro CSV: {e}")
-
-    # ── Todas as fontes falharam ──
-    # Cache permanece vazio → frontend exibe aviso de indisponibilidade.
-    # Melhor mostrar nada do que dados desatualizados ou inventados.
-    print("  ✗ Todas as fontes falharam. Cache de títulos vazio.")
+        print(f"  ⚠ manual externo: {e}")
+    return MANUAL_EMBUTIDO, "base manual embutida (mai/2026 — conferir atualidade)"
 
 
-# ─────────────────────────────────────────
-#  CRON — todo dia útil às 10:30 BRT
-# ─────────────────────────────────────────
+def atualizar_tesouro():
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Atualizando dados do Tesouro...")
+    for nome_fonte, fn in [
+        ("radaropcoes",  tentar_radaropcoes),
+        ("API B3/JSON",  tentar_b3_json),
+        ("CSV investir", tentar_csv),
+    ]:
+        try:
+            lista = fn()
+            if lista:
+                cache.update({
+                    "tesouro":               lista,
+                    "tesouro_status":        "online",
+                    "tesouro_fonte":         f"Tesouro Direto/STN via {nome_fonte}",
+                    "tesouro_atualizado_em": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "tesouro_erro_resumido": None,
+                })
+                salvar_cache()
+                print(f"  ✓ {len(lista)} títulos via {nome_fonte}.")
+                return
+            cache["tesouro_erro_resumido"] = f"{nome_fonte}: lista vazia"
+            print(f"  ⚠ {nome_fonte}: lista vazia.")
+        except Exception as e:
+            cache["tesouro_erro_resumido"] = f"{nome_fonte}: {str(e)[:120]}"
+            print(f"  ✗ {nome_fonte}: {str(e)[:120]}")
+
+    # Todas as fontes automáticas falharam
+    if not cache["tesouro"]:
+        lista_m, fonte_m = carregar_manual()
+        cache.update({
+            "tesouro":               lista_m,
+            "tesouro_status":        "manual",
+            "tesouro_fonte":         fonte_m,
+            "tesouro_atualizado_em": "15/05/2026 18:00 (base de referência)",
+        })
+        salvar_cache()
+        print(f"  ⚠ Usando {fonte_m}: {len(lista_m)} títulos.")
+    else:
+        cache["tesouro_status"] = "cache"
+        print(f"  ⚠ Fontes falharam. Cache anterior preservado ({len(cache['tesouro'])} títulos).")
+
+
+# Cron: 10:00, 13:00 e 17:45 em dias úteis
 scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
-scheduler.add_job(
-    atualizar_tesouro,
-    CronTrigger(day_of_week="mon-fri", hour=10, minute=30,
-                timezone="America/Sao_Paulo"),
-)
+for h, m in [(10, 0), (13, 0), (17, 45)]:
+    scheduler.add_job(atualizar_tesouro,
+                      CronTrigger(day_of_week="mon-fri", hour=h, minute=m,
+                                  timezone="America/Sao_Paulo"))
 scheduler.start()
-
-# Busca imediata na inicialização
+carregar_cache()
 atualizar_tesouro()
 
 
-# ─────────────────────────────────────────
-#  Endpoint principal
-# ─────────────────────────────────────────
 @app.get("/api/mercado")
 async def get_market_data():
     selic     = get_bacen_data(432)   or 14.75
     ipca      = get_bacen_data(13522) or 4.39
     juro_real = round(((1 + selic / 100) / (1 + ipca / 100) - 1) * 100, 2)
-
     return {
-        "macro": {
-            "selic":     selic,
-            "ipca_proj": ipca,
-            "juro_real": juro_real,
-        },
-        "tesouro":  cache["tesouro"],
-        "cache_em": cache["atualizado_em"],
+        "macro": {"selic": selic, "ipca_proj": ipca, "juro_real": juro_real},
+        "tesouro":               cache["tesouro"],
+        "tesouro_status":        cache["tesouro_status"],
+        "tesouro_fonte":         cache["tesouro_fonte"],
+        "tesouro_atualizado_em": cache["tesouro_atualizado_em"],
+        "tesouro_erro_resumido": cache["tesouro_erro_resumido"],
+        "aviso": "Dados meramente informativos. Confira no Tesouro Direto antes de investir.",
     }
 
 
-# ─────────────────────────────────────────
-#  Endpoint de diagnóstico — só para debug
-#  Acesse: /api/debug para ver o CSV bruto
-#  e o resultado do parsing em tempo real.
-#  Remova em produção após confirmar parsing.
-# ─────────────────────────────────────────
-@app.get("/api/debug")
-async def debug():
-    url = (
-        "https://www.tesourodireto.com.br/documents/d/guest/"
-        "rendimento-investir-csv?download=true"
-    )
-    try:
-        resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        raw  = resp.text
-        linhas = raw.strip().split('\n')
-        return {
-            "status_code": resp.status_code,
-            "encoding":    resp.encoding,
-            "num_linhas":  len(linhas),
-            "header_raw":  linhas[0] if linhas else None,
-            "linhas_raw":  linhas[:6],          # primeiras 6 linhas cruas
-            "cache_atual": cache["tesouro"],
-            "cache_em":    cache["atualizado_em"],
-        }
-    except Exception as e:
-        return {"erro": str(e), "cache_atual": cache["tesouro"]}
+@app.post("/api/admin/refresh")
+async def admin_refresh(x_admin_token: str = Header(default=None)):
+    if x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Token inválido.")
+    atualizar_tesouro()
+    return {"ok": True, "tesouro_status": cache["tesouro_status"],
+            "tesouro_fonte": cache["tesouro_fonte"],
+            "tesouro_atualizado_em": cache["tesouro_atualizado_em"],
+            "total_titulos": len(cache["tesouro"])}
 
 
-# ─────────────────────────────────────────
-#  Entrypoint
-# ─────────────────────────────────────────
+@app.get("/api/admin/debug")
+async def admin_debug(x_admin_token: str = Header(default=None)):
+    if x_admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Token inválido.")
+    resultados = {}
+    for nome_fonte, fn in [("radaropcoes", tentar_radaropcoes),
+                            ("API B3/JSON", tentar_b3_json),
+                            ("CSV investir", tentar_csv)]:
+        try:
+            lista = fn()
+            resultados[nome_fonte] = {"ok": bool(lista), "total": len(lista or []),
+                                      "amostra": (lista or [])[:2]}
+        except Exception as e:
+            resultados[nome_fonte] = {"ok": False, "erro": str(e)[:200]}
+    return {"cache_status": cache["tesouro_status"], "cache_fonte": cache["tesouro_fonte"],
+            "cache_atualizado_em": cache["tesouro_atualizado_em"],
+            "cache_total": len(cache["tesouro"]),
+            "cache_erro_resumido": cache["tesouro_erro_resumido"],
+            "fontes_agora": resultados}
+
+
 if __name__ == "__main__":
     import uvicorn
-    import os
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
