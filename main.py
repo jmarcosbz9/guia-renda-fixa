@@ -101,10 +101,157 @@ def parse_b3_bond(bond):
             "valor_minimo": vmin, "vencimento": venc}
 
 
-def tentar_radaropcoes():
+# ─────────────────────────────────────────
+#  Lista de títulos ativos conhecidos
+#  Usada pela estratégia de endpoints individuais.
+#  Atualizar quando o Tesouro lançar novos títulos.
+# ─────────────────────────────────────────
+TITULOS_CONHECIDOS = [
+    "Tesouro Selic 2031",
+    "Tesouro Selic 2029",
+    "Tesouro Selic 2028",
+    "Tesouro Prefixado 2027",
+    "Tesouro Prefixado 2028",
+    "Tesouro Prefixado 2029",
+    "Tesouro Prefixado 2031",
+    "Tesouro Prefixado 2032",
+    "Tesouro Prefixado com Juros Semestrais 2027",
+    "Tesouro Prefixado com Juros Semestrais 2029",
+    "Tesouro Prefixado com Juros Semestrais 2031",
+    "Tesouro Prefixado com Juros Semestrais 2033",
+    "Tesouro Prefixado com Juros Semestrais 2035",
+    "Tesouro Prefixado com Juros Semestrais 2037",
+    "Tesouro IPCA+ 2029",
+    "Tesouro IPCA+ 2032",
+    "Tesouro IPCA+ 2035",
+    "Tesouro IPCA+ 2040",
+    "Tesouro IPCA+ 2045",
+    "Tesouro IPCA+ 2050",
+    "Tesouro IPCA+ com Juros Semestrais 2030",
+    "Tesouro IPCA+ com Juros Semestrais 2032",
+    "Tesouro IPCA+ com Juros Semestrais 2035",
+    "Tesouro IPCA+ com Juros Semestrais 2037",
+    "Tesouro IPCA+ com Juros Semestrais 2040",
+    "Tesouro IPCA+ com Juros Semestrais 2045",
+    "Tesouro IPCA+ com Juros Semestrais 2055",
+    "Tesouro Renda+ Aposentadoria Extra 2030",
+    "Tesouro Renda+ Aposentadoria Extra 2035",
+    "Tesouro Renda+ Aposentadoria Extra 2040",
+    "Tesouro Renda+ Aposentadoria Extra 2045",
+    "Tesouro Renda+ Aposentadoria Extra 2050",
+    "Tesouro Renda+ Aposentadoria Extra 2055",
+    "Tesouro Renda+ Aposentadoria Extra 2060",
+    "Tesouro Renda+ Aposentadoria Extra 2065",
+    "Tesouro Educa+ 2026",
+    "Tesouro Educa+ 2028",
+    "Tesouro Educa+ 2030",
+    "Tesouro Educa+ 2032",
+    "Tesouro Educa+ 2035",
+]
+
+
+def parse_individual_bond(nome: str, data: dict) -> dict | None:
+    """
+    Converte resposta do endpoint /bonds/{nome} para formato interno.
+    Campos relevantes do temp_8.PNG:
+      investmentProfitabilityIndexerName → label da taxa (ex: "SELIC + 0,0815%")
+      investmentBondMinimumValue         → valor mínimo
+      maturityDate                       → vencimento (ISO)
+      updated_at                         → timestamp da última atualização
+    A taxa numérica é extraída do label.
+    """
+    label_raw = data.get("investmentProfitabilityIndexerName", "")
+    if not label_raw:
+        return None
+
+    # Extrai taxa numérica: "SELIC + 0,0815%" → 0.0815
+    #                       "IPCA + 7,23%"   → 7.23
+    #                       "13,87%"         → 13.87
+    num_str = label_raw.replace("%", "").split("+")[-1].strip().replace(",", ".")
+    try:
+        taxa = float(num_str)
+    except Exception:
+        return None
+
+    # Label formatado
+    ll = label_raw.lower()
+    if "selic" in ll:
+        label = f"Selic + {taxa:.4g}% a.a.".replace(".", ",")
+    elif "ipca" in ll:
+        label = f"IPCA + {taxa:.2f}% a.a.".replace(".", ",")
+    else:
+        label = f"{taxa:.2f}% a.a.".replace(".", ",")
+
+    # Vencimento
+    venc_raw = (data.get("maturityDate") or "")[:10]
+    if "-" in venc_raw:
+        y, m, d = venc_raw.split("-")
+        venc = f"{d}/{m}/{y}"
+    else:
+        venc = venc_raw
+
+    vmin = data.get("investmentBondMinimumValue")
+    try:
+        vmin = round(float(vmin), 2) if vmin else None
+    except Exception:
+        vmin = None
+
+    # Só retorna se tem tipo "investir" (não "resgatar")
+    tipo = data.get("type", "")
+    if tipo == "resgatar":
+        return None
+
+    return {
+        "nome":                nome,
+        "taxa":                taxa,
+        "rentabilidade_label": label,
+        "valor_minimo":        vmin,
+        "vencimento":          venc,
+    }
+
+
+def tentar_radaropcoes_individual():
+    """
+    Estratégia: busca cada título individualmente via
+    GET /bonds/{nome} — endpoint que não sofre bloqueio
+    Cloudflare como o /bonds.json agregado.
+    Retorna apenas títulos com type='investir'.
+    """
+    from urllib.parse import quote
+    BASE = "https://api.radaropcoes.com/bonds/"
+    lista = []
+    erros = 0
+
+    for nome in TITULOS_CONHECIDOS:
+        url = BASE + quote(nome)
+        try:
+            r = requests.get(url, headers=BROWSER_HEADERS, timeout=8)
+            if r.status_code == 404:
+                continue  # título não existe/não está ativo
+            if r.status_code != 200:
+                erros += 1
+                continue
+            if is_html(r.text):
+                erros += 1
+                continue
+            parsed = parse_individual_bond(nome, r.json())
+            if parsed:
+                lista.append(parsed)
+        except Exception as e:
+            print(f"    ✗ individual {nome}: {e}")
+            erros += 1
+
+    print(f"    individual: {len(lista)} títulos OK, {erros} erros")
+    return lista if lista else None
+
+
+def tentar_radaropcoes_bulk():
+    """Fallback: tenta o bonds.json agregado (bloqueado em datacenter)."""
     r = requests.get("https://api.radaropcoes.com/bonds.json",
                      headers=BROWSER_HEADERS, timeout=10)
     r.raise_for_status()
+    if is_html(r.text):
+        raise ValueError("Cloudflare challenge recebido")
     bonds = r.json().get("response", {}).get("TrsrBdTradgList", [])
     lista = [x for x in (parse_b3_bond(i.get("TrsrBd", {})) for i in bonds) if x]
     return lista or None
@@ -190,9 +337,10 @@ def carregar_manual():
 def atualizar_tesouro():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Atualizando dados do Tesouro...")
     for nome_fonte, fn in [
-        ("radaropcoes",  tentar_radaropcoes),
-        ("API B3/JSON",  tentar_b3_json),
-        ("CSV investir", tentar_csv),
+        ("radaropcoes individual",  tentar_radaropcoes_individual),
+        ("radaropcoes bulk",        tentar_radaropcoes_bulk),
+        ("API B3/JSON",             tentar_b3_json),
+        ("CSV investir",            tentar_csv),
     ]:
         try:
             lista = fn()
