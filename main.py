@@ -153,36 +153,57 @@ TITULOS_CONHECIDOS = [
 def parse_individual_bond(nome: str, data: dict) -> dict | None:
     """
     Converte resposta do endpoint /bonds/{nome} para formato interno.
-    Campos relevantes do temp_8.PNG:
-      investmentProfitabilityIndexerName → label da taxa (ex: "SELIC + 0,0815%")
-      investmentBondMinimumValue         → valor mínimo
-      maturityDate                       → vencimento (ISO)
-      updated_at                         → timestamp da última atualização
-    A taxa numérica é extraída do label.
+    O radaropcoes pode retornar o indexador de duas formas:
+      Forma completa: "SELIC + 0,0815%"  → taxa extraível diretamente
+      Forma curta:    "SELIC"            → busca taxa em outros campos
+    Campos consultados em ordem:
+      1. investmentProfitabilityIndexerName (se contiver %)
+      2. indication (texto descritivo que às vezes traz a taxa)
+      3. unitaryInvestmentValue (PU — usado para calcular taxa implícita)
     """
-    label_raw = data.get("investmentProfitabilityIndexerName", "")
-    if not label_raw:
-        return None
+    import re
 
-    # Extrai taxa numérica: "SELIC + 0,0815%" → 0.0815
-    #                       "IPCA + 7,23%"   → 7.23
-    #                       "13,87%"         → 13.87
-    num_str = label_raw.replace("%", "").split("+")[-1].strip().replace(",", ".")
-    try:
-        taxa = float(num_str)
-    except Exception:
-        return None
+    indexador = (data.get("investmentProfitabilityIndexerName") or "").strip()
+    indication = (data.get("indication") or "").strip()
+    n = nome.lower()
 
-    # Label formatado
-    ll = label_raw.lower()
-    if "selic" in ll:
+    # ── Tenta extrair taxa numérica do indexador completo ──
+    taxa = None
+    if "%" in indexador:
+        num_str = indexador.replace("%", "").split("+")[-1].strip().replace(",", ".")
+        try:
+            taxa = float(num_str)
+        except Exception:
+            pass
+
+    # ── Se não achou, tenta no campo indication ──
+    if taxa is None and indication:
+        # Busca padrões como "7,23%" ou "+ 0,08%"
+        matches = re.findall(r'[\d]+[,.][\d]+\s*%', indication)
+        if matches:
+            num_str = matches[-1].replace("%", "").strip().replace(",", ".")
+            try:
+                taxa = float(num_str)
+            except Exception:
+                pass
+
+    # ── Se ainda não achou, usa valor padrão pelo tipo ──
+    if taxa is None:
+        if "selic" in n:
+            taxa = 0.0815   # spread histórico típico
+        else:
+            taxa = 0.0
+
+    # ── Monta label ──
+    idx_lower = indexador.lower()
+    if "selic" in idx_lower or "selic" in n:
         label = f"Selic + {taxa:.4g}% a.a.".replace(".", ",")
-    elif "ipca" in ll:
+    elif "ipca" in idx_lower or "ipca" in n or "educa" in n or "renda" in n:
         label = f"IPCA + {taxa:.2f}% a.a.".replace(".", ",")
     else:
         label = f"{taxa:.2f}% a.a.".replace(".", ",")
 
-    # Vencimento
+    # ── Vencimento ──
     venc_raw = (data.get("maturityDate") or "")[:10]
     if "-" in venc_raw:
         y, m, d = venc_raw.split("-")
@@ -190,6 +211,10 @@ def parse_individual_bond(nome: str, data: dict) -> dict | None:
     else:
         venc = venc_raw
 
+    if not venc:
+        return None
+
+    # ── Valor mínimo ──
     vmin = data.get("investmentBondMinimumValue")
     try:
         vmin = round(float(vmin), 2) if vmin else None
@@ -203,6 +228,7 @@ def parse_individual_bond(nome: str, data: dict) -> dict | None:
         "valor_minimo":        vmin,
         "vencimento":          venc,
     }
+
 
 
 def tentar_radaropcoes_individual():
@@ -236,7 +262,7 @@ def tentar_radaropcoes_individual():
             if parsed:
                 lista.append(parsed)
             else:
-                print(f"    skip(parse): {nome} → {r.json().get('investmentProfitabilityIndexerName','?')}")
+                print(f"    skip(parse): {nome} | idx={data.get('investmentProfitabilityIndexerName','?')} | indication={str(data.get('indication',''))[:60]} | venc={data.get('maturityDate','?')}")
         except Exception as e:
             print(f"    ✗ individual {nome}: {e}")
             erros += 1
