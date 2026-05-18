@@ -222,16 +222,21 @@ def tentar_radaropcoes_individual():
         try:
             r = requests.get(url, headers=BROWSER_HEADERS, timeout=8)
             if r.status_code == 404:
-                continue  # título não existe/não está ativo
+                print(f"    404: {nome}")
+                continue
             if r.status_code != 200:
+                print(f"    {r.status_code}: {nome}")
                 erros += 1
                 continue
             if is_html(r.text):
+                print(f"    HTML(CF): {nome}")
                 erros += 1
                 continue
             parsed = parse_individual_bond(nome, r.json())
             if parsed:
                 lista.append(parsed)
+            else:
+                print(f"    skip(parse): {nome} → {r.json().get('investmentProfitabilityIndexerName','?')}")
         except Exception as e:
             print(f"    ✗ individual {nome}: {e}")
             erros += 1
