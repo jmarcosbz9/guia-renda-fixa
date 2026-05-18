@@ -196,11 +196,6 @@ def parse_individual_bond(nome: str, data: dict) -> dict | None:
     except Exception:
         vmin = None
 
-    # Só retorna se tem tipo "investir" (não "resgatar")
-    tipo = data.get("type", "")
-    if tipo == "resgatar":
-        return None
-
     return {
         "nome":                nome,
         "taxa":                taxa,
