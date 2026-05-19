@@ -143,10 +143,23 @@ TITULOS_CONHECIDOS = [
     "Tesouro Renda+ Aposentadoria Extra 2060",
     "Tesouro Renda+ Aposentadoria Extra 2065",
     "Tesouro Educa+ 2026",
+    "Tesouro Educa+ 2027",
     "Tesouro Educa+ 2028",
+    "Tesouro Educa+ 2029",
     "Tesouro Educa+ 2030",
+    "Tesouro Educa+ 2031",
     "Tesouro Educa+ 2032",
+    "Tesouro Educa+ 2033",
+    "Tesouro Educa+ 2034",
     "Tesouro Educa+ 2035",
+    "Tesouro Educa+ 2036",
+    "Tesouro Educa+ 2037",
+    "Tesouro Educa+ 2038",
+    "Tesouro Educa+ 2039",
+    "Tesouro Educa+ 2040",
+    "Tesouro Educa+ 2041",
+    "Tesouro Educa+ 2042",
+    "Tesouro Educa+ 2043",
 ]
 
 
