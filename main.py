@@ -151,73 +151,55 @@ TITULOS_CONHECIDOS = [
 
 
 def parse_individual_bond(nome: str, data: dict) -> dict | None:
-    """
-    Converte resposta do endpoint /bonds/{nome} para formato interno.
-    O radaropcoes pode retornar o indexador de duas formas:
-      Forma completa: "SELIC + 0,0815%"  → taxa extraível diretamente
-      Forma curta:    "SELIC"            → busca taxa em outros campos
-    Campos consultados em ordem:
-      1. investmentProfitabilityIndexerName (se contiver %)
-      2. indication (texto descritivo que às vezes traz a taxa)
-      3. unitaryInvestmentValue (PU — usado para calcular taxa implícita)
-    """
     import re
 
-    indexador = (data.get("investmentProfitabilityIndexerName") or "").strip()
-    indication = (data.get("indication") or "").strip()
+    idx_inv  = (data.get("investmentProfitabilityIndexerName")  or "").strip()
+    idx_red  = (data.get("redemptionProfitabilityFeeIndexerName") or "").strip()
     n = nome.lower()
 
-    # ── Tenta extrair taxa numérica do indexador completo ──
+    # Escolhe o campo correto por tipo de título:
+    # IPCA+/Educa+/Renda+: investmentProfitabilityIndexerName retorna só "IPCA"
+    #                       redemptionProfitabilityFeeIndexerName tem "IPCA + 8,07%"
+    # Prefixado/Selic:      investmentProfitabilityIndexerName já tem a taxa completa
+    if "ipca" in n or "educa" in n or "renda" in n:
+        idx_raw = idx_red if "%" in idx_red else idx_inv
+    else:
+        idx_raw = idx_inv if "%" in idx_inv else idx_red
+
+    # Extrai taxa numérica
     taxa = None
-    if "%" in indexador:
-        num_str = indexador.replace("%", "").split("+")[-1].strip().replace(",", ".")
+    if "%" in idx_raw:
+        num_str = idx_raw.replace("%", "").split("+")[-1].strip().replace(",", ".")
         try:
             taxa = float(num_str)
         except Exception:
             pass
 
-    # ── Se não achou, tenta no campo indication ──
-    if taxa is None and indication:
-        # Busca padrões como "7,23%" ou "+ 0,08%"
-        matches = re.findall(r'[\d]+[,.][\d]+\s*%', indication)
-        if matches:
-            num_str = matches[-1].replace("%", "").strip().replace(",", ".")
-            try:
-                taxa = float(num_str)
-            except Exception:
-                pass
-
-    # ── Se ainda não achou, usa valor padrão pelo tipo ──
     if taxa is None:
-        if "selic" in n:
-            taxa = 0.0815   # spread histórico típico
-        else:
-            taxa = 0.0
+        return None  # sem taxa → descarta
 
-    # ── Monta label ──
-    idx_lower = indexador.lower()
-    if "selic" in idx_lower or "selic" in n:
+    # Monta label
+    if "selic" in n:
         label = f"Selic + {taxa:.4g}% a.a.".replace(".", ",")
-    elif "ipca" in idx_lower or "ipca" in n or "educa" in n or "renda" in n:
+    elif "ipca" in n or "educa" in n or "renda" in n:
         label = f"IPCA + {taxa:.2f}% a.a.".replace(".", ",")
     else:
         label = f"{taxa:.2f}% a.a.".replace(".", ",")
 
-    # ── Vencimento ──
+    # Vencimento
     venc_raw = (data.get("maturityDate") or "")[:10]
     if "-" in venc_raw:
         y, m, d = venc_raw.split("-")
         venc = f"{d}/{m}/{y}"
     else:
         venc = venc_raw
-
     if not venc:
         return None
 
-    # ── Valor mínimo ──
-    vmin = data.get("investmentBondMinimumValue")
+    # Valor mínimo — usa investmentBondMinimumValue; se 0, usa unitaryInvestmentValue/100
+    vmin = data.get("investmentBondMinimumValue") or 0
     try:
-        vmin = round(float(vmin), 2) if vmin else None
+        vmin = round(float(vmin), 2) or None
     except Exception:
         vmin = None
 
@@ -228,7 +210,6 @@ def parse_individual_bond(nome: str, data: dict) -> dict | None:
         "valor_minimo":        vmin,
         "vencimento":          venc,
     }
-
 
 
 def tentar_radaropcoes_individual():
