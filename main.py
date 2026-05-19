@@ -21,6 +21,10 @@ cache = {
     "tesouro_fonte":         None,
     "tesouro_atualizado_em": None,
     "tesouro_erro_resumido": None,
+    # Macro — atualizados junto com os títulos (cron 10h/13h/17h45)
+    "selic":                 14.75,
+    "ipca_proj":             4.39,
+    "juro_real":             9.92,
 }
 
 MANUAL_EMBUTIDO = [
@@ -356,6 +360,18 @@ def carregar_manual():
 
 def atualizar_tesouro():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Atualizando dados do Tesouro...")
+
+    # ── Atualiza macro (BCB SGS) ──
+    selic = get_bacen_data(432)
+    ipca  = get_bacen_data(13522)
+    if selic and ipca:
+        cache["selic"]     = selic
+        cache["ipca_proj"] = ipca
+        cache["juro_real"] = round(((1 + selic/100) / (1 + ipca/100) - 1) * 100, 2)
+        print(f"  ✓ Macro: Selic={selic}% IPCA={ipca}% JuroReal={cache['juro_real']}%")
+    else:
+        print(f"  ⚠ BCB indisponível — mantendo macro do cache.")
+
     for nome_fonte, fn in [
         ("radaropcoes individual",  tentar_radaropcoes_individual),
         ("radaropcoes bulk",        tentar_radaropcoes_bulk),
@@ -410,11 +426,12 @@ atualizar_tesouro()
 
 @app.get("/api/mercado")
 async def get_market_data():
-    selic     = get_bacen_data(432)   or 14.75
-    ipca      = get_bacen_data(13522) or 4.39
-    juro_real = round(((1 + selic / 100) / (1 + ipca / 100) - 1) * 100, 2)
     return {
-        "macro": {"selic": selic, "ipca_proj": ipca, "juro_real": juro_real},
+        "macro": {
+            "selic":     cache["selic"],
+            "ipca_proj": cache["ipca_proj"],
+            "juro_real": cache["juro_real"],
+        },
         "tesouro":               cache["tesouro"],
         "tesouro_status":        cache["tesouro_status"],
         "tesouro_fonte":         cache["tesouro_fonte"],
